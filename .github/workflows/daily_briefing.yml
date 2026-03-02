@@ -1,0 +1,53 @@
+name: Daily Market Briefing
+
+on:
+  schedule:
+    # 한국 시간 오전 6:30 = UTC 21:30 (이전날)
+    - cron: '30 21 * * 0-4'
+  
+  # 수동 실행 가능
+  workflow_dispatch:
+    inputs:
+      additional_args:
+        description: '추가 인자 (선택사항)'
+        required: false
+        default: ''
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install yfinance pandas numpy requests python-telegram-bot
+        pip install matplotlib mplfinance pandas-ta
+    
+    - name: Run daily briefing
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        NAVER_CLOVA_CLIENT_ID: ${{ secrets.NAVER_CLOVA_CLIENT_ID }}
+        NAVER_CLOVA_CLIENT_SECRET: ${{ secrets.NAVER_CLOVA_CLIENT_SECRET }}
+      run: |
+        cd $GITHUB_WORKSPACE
+        python3 bandi_quant_v40.py
+    
+    - name: Upload analysis results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: analysis-results
+        path: |
+          analysis/
+          charts/
+        retention-days: 7
