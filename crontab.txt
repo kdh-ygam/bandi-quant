@@ -1,0 +1,2 @@
+# Daily Briefing Cron Job
+0 7 * * * /Users/mchom/.openclaw/workspace/daily_briefing.sh >> /Users/mchom/.openclaw/workspace/logs/briefing.log 2>&1

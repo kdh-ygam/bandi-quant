@@ -1,0 +1,32 @@
+=== NVIDIA ===
+title       Nvidia Stock Price Today | NASDAQ: NVDA Live - Investing.com
+body        View today's NVIDIA Corporation stock price and latest NVDA news and analysis.
+
+=== TESLA ===
+title       TSLA Is Down 11% in 2026 and Reddit Is Losing Faith Fast
+body        Always a heated discussion around its future, as of February 2026 , 16 of 33
+
+=== SK Hynix ===
+title       SK hynix Inc. (000660.KS) Stock Price, News, Quote & History - Yahoo Finance
+body        More about SK hynix Inc. ... Trailing total returns as of 2/27/2026, which may
+
+=== Samsung Electronics ===
+title       Samsung Electronics Co., Ltd. (005930.KS) Stock Price, News ...
+body        Find the latest Samsung Electronics Co., Ltd. ( 005930 .KS) stock quote,
+
+=== Hyundai Motor ===
+title       Hyundai Motor Company (005380.KS) Stock Price, News, Quote & History - Yahoo
+body        Find the latest Hyundai Motor Company (005380.KS) stock quote, history, news
+
+=== KIA ===
+title       Kia Corporation (000270.KS) Stock Price, News, Quote History
+body        Find the latest Kia Corporation (000270.KS) stock quote, history, news and
+=== Celltrion ===
+title       Celltrion, Inc. (068270.KS) Stock Price, News, Quote & History - Yahoo ...
+body        Find the latest Celltrion , Inc. ( 068270 .KS) stock quote, history, news and
+=== Ford GM ===
+title       How Ford Stock Performed February 23rd 2026 - February 27th, 2026
+body        23 hours ago · Ford stock value increased by $0.08 per share during the
+=== QuantumScape ===
+title       QuantumScape Corporation (QS) Stock Price, News, Quote & History
+body        QuantumScape (QS) is navigating a critical phase as it advances its solid-

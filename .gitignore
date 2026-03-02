@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+bandi_env/
+venv/
+.env
+
+# OpenClaw
+.openclaw/
+.clawrc
+
+# Data files (too large)
+data/
+*.csv
+*.xlsx
+*.parquet
+
+# Charts & Output
+charts/*.png
+analysis/
+logs/
+
+# Secrets
+*.key
+*.pem
+*.p12
+token.txt
+credentials.json
+
+# System
+.DS_Store

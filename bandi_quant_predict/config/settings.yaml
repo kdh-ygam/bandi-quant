@@ -1,0 +1,46 @@
+# 반디 퀀트 예측 시스템 설정
+# Created: 2026-02-28 | Version: MVP v1.0
+
+system:
+  name: "Bandi Quant Prediction System"
+  version: "1.0.0"
+  timezone: "Asia/Seoul"
+  
+data:
+  period: "1y"           # 1년 데이터 학습
+  interval: "1d"         # 일봉
+  prediction_days: 5     # 5일 예측
+  
+features:
+  rsi_period: 14
+  ma_short: 5
+  ma_long: 20
+  volatility_period: 20
+  
+model:
+  type: "random_forest"
+  n_estimators: 100
+  max_depth: 10
+  test_size: 0.2
+  
+trading:
+  initial_capital: 100000  # $10만
+  max_position: 0.10       # 종목당 10%
+  stop_loss: 0.07          # -7% 손절
+  take_profit: 0.15        # +15% 익절
+  
+telegram:
+  enabled: true
+  briefing_time: "06:30"   # KST
+  
+tickers:
+  core:  # 핵심 종목 (MVP 테스트용)
+    - PLTR
+    - TSLA
+    - NVDA
+    - TE
+    - ENPH
+  korean:
+    - 005930.KS  # 삼성전자
+    - 000660.KS  # SK하이닉스
+    - 005380.KS  # 현대차

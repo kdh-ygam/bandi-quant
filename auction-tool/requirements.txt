@@ -1,0 +1,36 @@
+# 경매 분석 툴 - 필요 패키지
+# 설치: pip install -r requirements.txt
+
+# 웹 스크래핑
+selenium>=4.15.0
+playwright>=1.40.0
+beautifulsoup4>=4.12.0
+requests>=2.31.0
+
+# 데이터 처리
+pandas>=2.1.0
+numpy>=1.24.0
+openpyxl>=3.1.0
+
+# AI/LLM
+openai>=1.0.0
+
+# 데이터베이스
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+
+# 웹 대시보드
+streamlit>=1.28.0
+plotly>=5.18.0
+
+# 유틸리티
+python-dotenv>=1.0.0
+schedule>=1.2.0
+python-telegram-bot>=20.6
+
+# PDF 처리
+pypdf>=3.17.0
+pdfplumber>=0.10.0
+
+# 테스트
+pytest>=7.4.0

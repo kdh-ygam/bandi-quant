@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>반디 퀀트 - QuantumScape 차트</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        #chart {
+            width: 100%;
+            height: 500px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stat-box {
+            text-align: center;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+        }
+        .positive { color: #e74c3c; }
+        .negative { color: #3498db; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 QuantumScape (QS) 주가 차트</h1>
+        <div class="subtitle">반디 퀀트 제공 | 최근 60일 데이터</div>
+        <div id="chart"></div>
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <script>
+        // JSON 데이터 (실제로는 외부 파일에서 로드)
+        const chartData = [
+  {"date": "2025-11-28", "close": 12.22, "volume": 6935400},
+  {"date": "2025-12-01", "close": 11.73, "volume": 11951100},
+  {"date": "2025-12-02", "close": 11.84, "volume": 11241600},
+  {"date": "2025-12-03", "close": 11.92, "volume": 10313100},
+  {"date": "2025-12-04", "close": 12.28, "volume": 15390900}, {"date": "2025-12-05", "close": 12.15, "volume": 11736900}, {"date": "2025-12-06", "close": 12.09, "volume": 11461500}, {"date": "2025-12-09", "close": 12.13, "volume": 11122200}, {"date": "2025-12-10", "close": 11.51, "volume": 16915500}, {"date": "2025-12-11", "close": 11.45, "volume": 15224400}, {"date": "2025-12-12", "close": 11.18, "volume": 13599000}, {"date": "2025-12-13", "close": 11.14, "volume": 13132800}, {"date": "2025-12-16", "close": 10.68, "volume": 13599000}, {"date": "2025-12-17", "close": 10.79, "volume": 13764600}, {"date": "2025-12-18", "close": 10.51, "volume": 14434200}, {"date": "2025-12-19", "close": 10.18, "volume": 15545700}, {"date": "2025-12-20", "close": 10.18, "volume": 11405700}, {"date": "2025-12-23", "close": 9.81, "volume": 11680200}, {"date": "2025-12-24", "close": 10.0, "volume": 10368900}, {"date": "2025-12-26", "close": 9.78, "volume": 9668400}, {"date": "2025-12-27", "close": 9.8, "volume": 11047500}, {"date": "2025-12-30", "close": 10.23, "volume": 13717200}, {"date": "2026-01-02", "close": 10.35, "volume": 12335400}, {"date": "2026-01-03", "close": 10.35, "volume": 9835500}, {"date": "2026-01-06", "close": 9.89, "volume": 15365700}, {"date": "2026-01-07", "close": 9.7, "volume": 13754100}, {"date": "2026-01-08", "close": 9.6, "volume": 11844000}, {"date": "2026-01-09", "close": 9.6, "volume": 10470600}, {"date": "2026-01-10", "close": 9.61, "volume": 9007800}, {"date": "2026-01-13", "close": 9.31, "volume": 14574000}, {"date": "2026-01-14", "close": 8.75, "volume": 18219600}, {"date": "2026-01-15", "close": 8.67, "volume": 15838200}, {"date": "2026-01-16", "close": 8.53, "volume": 12826800}, {"date": "2026-01-17", "close": 8.59, "volume": 12946500}, {"date": "2026-01-21", "close": 8.22, "volume": 18144000}, {"date": "2026-01-22", "close": 7.77, "volume": 18333000}, {"date": "2026-01-23", "close": 7.72, "volume": 16663500}, {"date": "2026-01-24", "close": 7.87, "volume": 13408500}, {"date": "2026-01-27", "close": 7.46, "volume": 14805000}, {"date": "2026-01-28", "close": 7.25, "volume": 15655500}, {"date": "2026-01-29", "close": 7.22, "volume": 13545000}, {"date": "2026-01-30", "close": 7.02, "volume": 14499000}, {"date": "2026-01-31", "close": 7.04, "volume": 11602500}, {"date": "2026-02-03", "close": 6.98, "volume": 12789000}, {"date": "2026-02-04", "close": 7.21, "volume": 13261500}, {"date": "2026-02-05", "close": 7.09, "volume": 12033000}, {"date": "2026-02-06", "close": 7.09, "volume": 10626000}, {"date": "2026-02-07", "close": 7.13, "volume": 10363500}, {"date": "2026-02-10", "close": 6.91, "volume": 12453000}, {"date": "2026-02-11", "close": 6.99, "volume": 11109000}, {"date": "2026-02-12", "close": 7.29, "volume": 13566000}, {"date": "2026-02-13", "close": 7.29, "volume": 13144500}, {"date": "2026-02-14", "close": 7.09, "volume": 10594500}, {"date": "2026-02-17", "close": 6.9, "volume": 11251800}, {"date": "2026-02-18", "close": 6.88, "volume": 10201800}, {"date": "2026-02-19", "close": 7.15, "volume": 11529000}, {"date": "2026-02-20", "close": 7.19, "volume": 11302200}, {"date": "2026-02-21", "close": 7.19, "volume": 9909900}, {"date": "2026-02-24", "close": 7.1, "volume": 11818800}, {"date": "2026-02-25", "close": 7.03, "volume": 10602900}, {"date": "2026-02-26", "close": 7.03, "volume": 13566000}
+];
+
+        const dates = chartData.map(d => d.date);
+        const prices = chartData.map(d => d.close);
+        const volumes = chartData.map(d => d.volume);
+
+        // 가격 차트 (선 + 마커)
+        const priceTrace = {
+            x: dates,
+            y: prices,
+            type: 'scatter',
+            mode: 'lines+markers',
+            name: '종가',
+            line: { color: '#3498db', width: 2 },
+            marker: { size: 4, color: '#2980b9' },
+            yaxis: 'y1'
+        };
+
+        // 거래량 막대
+        const volumeColors = volumes.map((v, i) => {
+            return i > 0 && prices[i] >= prices[i-1] ? '#e74c3c' : '#3498db';
+        });
+
+        const volumeTrace = {
+            x: dates,
+            y: volumes,
+            type: 'bar',
+            name: '거래량',
+            marker: { color: volumeColors, opacity: 0.6 },
+            yaxis: 'y2'
+        };
+
+        // 레이아웃
+        const layout = {
+            grid: {
+                rows: 2,
+                columns: 1,
+                pattern: 'coupled',
+                roworder: 'top to bottom'
+            },
+            xaxis: {
+                domain: [0, 1],
+                rangeslider: { visible: false }
+            },
+            yaxis: {
+                title: '가격 ($)',
+                domain: [0.3, 1]
+            },
+            yaxis2: {
+                title: '거래량',
+                domain: [0, 0.25],
+                overlaying: 'y'
+            },
+            hovermode: 'x unified',
+            showlegend: true,
+            legend: { x: 0.02, y: 0.98, bgcolor: 'rgba(255,255,255,0.8)' }
+        };
+
+        Plotly.newPlot('chart', [priceTrace, volumeTrace], layout, {responsive: true});
+
+        // 통계 계산
+        const currentPrice = prices[prices.length - 1];
+        const prevPrice = prices[prices.length - 2];
+        const changePct = ((currentPrice - prevPrice) / prevPrice * 100).toFixed(2);
+        const highPrice = Math.max(...prices);
+        const lowPrice = Math.min(...prices);
+        const avgVolume = (volumes.reduce((a, b) => a + b, 0) / volumes.length / 1000000).toFixed(1);
+
+        const statsHtml = `
+            <div class="stat-box">
+                <div class="stat-label">현재가</div>
+                <div class="stat-value">$${currentPrice.toFixed(2)}</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">전일대비</div>
+                <div class="stat-value ${changePct >= 0 ? 'positive' : 'negative'}">${changePct >= 0 ? '+' : ''}${changePct}%</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">최고/최저</div>
+                <div class="stat-value">$${highPrice.toFixed(2)} / $${lowPrice.toFixed(2)}</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">평균거래량</div>
+                <div class="stat-value">${avgVolume}M</div>
+            </div>
+        `;
+        document.getElementById('stats').innerHTML = statsHtml;
+    </script>
+</body>
+</html>
