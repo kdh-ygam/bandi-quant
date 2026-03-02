@@ -39,8 +39,8 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         NAVER_CLOVA_CLIENT_ID: ${{ secrets.NAVER_CLOVA_CLIENT_ID }}
         NAVER_CLOVA_CLIENT_SECRET: ${{ secrets.NAVER_CLOVA_CLIENT_SECRET }}
+        WORKSPACE_DIR: ${{ github.workspace }}
       run: |
-        cd $GITHUB_WORKSPACE
         python3 bandi_quant_v40.py
     
     - name: Upload analysis results

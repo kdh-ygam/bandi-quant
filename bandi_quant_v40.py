@@ -40,8 +40,9 @@ except ImportError:
     CHART_AVAILABLE = False
     print("⚠️ chart_standard 미설치 - 차트 생략")
 
-# 차트 저장 경로
-CHART_DIR = "/Users/mchom/.openclaw/workspace/charts"
+# 차트 저장 경로 (GitHub Actions 환경 고려)
+WORKSPACE_DIR = os.getenv("WORKSPACE_DIR", os.path.dirname(os.path.abspath(__file__)))
+CHART_DIR = os.path.join(WORKSPACE_DIR, "charts")
 os.makedirs(CHART_DIR, exist_ok=True)
 
 # 텔레그램 설정
@@ -862,7 +863,7 @@ class BandiQuantV40:
     
     def save_results(self):
         """결과 저장"""
-        output_dir = "/Users/mchom/.openclaw/workspace/analysis"
+        output_dir = os.path.join(WORKSPACE_DIR, "analysis")
         os.makedirs(output_dir, exist_ok=True)
         filename = f"{output_dir}/briefing_v40_{self.date_str}.json"
         
