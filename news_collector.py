@@ -195,7 +195,7 @@ class AlphaVantageNewsCollector:
         
         # 1. 주요 기술주 뉴스
         tech_tickers = ["NVDA", "TSLA", "AAPL", "MSFT", "GOOGL"]
-        print(f"\n🔍 기술주 뉴스 수집 중... ({', '.join(tech_tickers)})
+        print(f"\n🔍 기술주 뉴스 수집 중... ({', '.join(tech_tickers)})")
         tech_news = self.get_news_sentiment(tickers=tech_tickers, limit=20)
         all_news.extend(tech_news)
         print(f"   ✅ {len(tech_news)}개 수집")
@@ -305,7 +305,7 @@ class AlphaVantageNewsCollector:
 
 
 class YahooFinanceNewsCollector:
-    """Yahoo Finance 뉴스 수집기 (폴백용)"""
+    """Yahoo Finance 뉴스 수집기 (Alpha Vantage 보완용)"""
     
     def __init__(self):
         if not YFINANCE_AVAILABLE:
@@ -348,26 +348,222 @@ class YahooFinanceNewsCollector:
         except Exception as e:
             print(f"  ⚠️ Yahoo Finance 뉴스 오류 ({ticker}): {e}")
             return []
+    
+    def get_market_news(self, tickers: List[str] = None, limit_per_ticker: int = 3) -> List[NewsItem]:
+        """
+        시장 전반 Yahoo Finance 뉴스 수집
+        
+        Args:
+            tickers: 종목 리스트 (없으면 기본 시장 지표 사용)
+            limit_per_ticker: 종목당 수집할 뉴스 수
+        """
+        if not YFINANCE_AVAILABLE:
+            print("⚠️ yfinance 미설치 - Yahoo 시장 뉴스 수집 불가")
+            return []
+        
+        # 기본 시장 대표 종목
+        if tickers is None:
+            tickers = [
+                "SPY",    # S&P 500
+                "QQQ",    # Nasdaq
+                "AAPL",   # Apple
+                "MSFT",   # Microsoft
+                "TSLA",   # Tesla
+                "NVDA",   # NVIDIA
+                "GOOGL",  # Google
+                "AMZN",   # Amazon
+                "META",   # Meta
+                "AMD",    # AMD
+            ]
+        
+        print("\n" + "="*60)
+        print("📰 Yahoo Finance 뉴스 수집")
+        print("="*60)
+        print(f"🔍 대상 종목: {', '.join(tickers[:5])} 등 {len(tickers)}개")
+        print(f"📊 종목당 수집: {limit_per_ticker}개")
+        
+        all_news = []
+        successful_tickers = []
+        
+        for ticker in tickers:
+            try:
+                print(f"   🔄 {ticker} 뉴스 수집 중...", end="\r")
+                news_items = self.get_ticker_news(ticker, limit=limit_per_ticker)
+                
+                if news_items:
+                    all_news.extend(news_items)
+                    successful_tickers.append(ticker)
+                    print(f"   ✅ {ticker}: {len(news_items)}개 수집")
+                else:
+                    print(f"   ⚪ {ticker}: 뉴스 없음")
+                
+                # Rate limit 방지 (0.5초 대기)
+                time.sleep(0.5)
+                
+            except Exception as e:
+                print(f"   ❌ {ticker}: {str(e)[:40]}")
+                continue
+        
+        print(f"\n✅ Yahoo 뉴스 수집 완료!")
+        print(f"   • 수집 성공: {len(successful_tickers)}/{len(tickers)}개 종목")
+        print(f"   • 총 뉴스: {len(all_news)}개")
+        
+        return all_news
+    
+    def get_sector_news(self, sector: str, limit: int = 10) -> List[NewsItem]:
+        """섹터별 Yahoo Finance 뉴스 수집"""
+        sector_tickers = {
+            "반도체": ["NVDA", "AMD", "INTC", "QCOM", "AVGO"],
+            "자동차": ["TSLA", "F", "GM", "RIVN", "LCID"],
+            "바이오": ["JNJ", "PFE", "MRNA", "ABBV", "LLY"],
+            "에너지": ["XOM", "CVX", "COP", "OXY", "SLB"],
+            "금융": ["JPM", "BAC", "WFC", "GS", "MS"],
+            "AI": ["PLTR", "AI", "CRWD", "SNOW", "DDOG"],
+        }
+        
+        tickers = sector_tickers.get(sector, ["SPY"])
+        print(f"\n🔍 {sector} 섹터 뉴스 수집...")
+        return self.get_market_news(tickers, limit_per_ticker=2)
 
 
 class NewsBriefingGenerator:
-    """뉴스 브리핑 생성기"""
+    """뉴스 브리핑 생성기 - Alpha Vantage + Yahoo Finance 통합"""
     
     def __init__(self):
         self.av_collector = AlphaVantageNewsCollector()
         self.yahoo_collector = YahooFinanceNewsCollector()
     
-    def generate_market_news_briefing(self) -> str:
-        """시장 뉴스 브리핑 생성"""
-        # Alpha Vantage로 수집
-        summary = self.av_collector.get_market_impact_news()
+    def generate_market_news_briefing(self, use_yahoo: bool = True) -> str:
+        """
+        시장 뉴스 브리핑 생성
+        
+        Args:
+            use_yahoo: Yahoo Finance 뉴스도 함께 수집 (기본값: True)
+        """
+        print("\n" + "="*70)
+        print("📰 반디 뉴스 브리핑 생성")
+        print("="*70)
+        
+        all_news = []
+        sources_used = []
+        
+        # 1. Alpha Vantage 뉴스 수집 (감성분석 제공)
+        print("\n🔄 Source 1: Alpha Vantage News API")
+        av_summary = self.av_collector.get_market_impact_news()
+        if av_summary and av_summary.total_news_count > 0:
+            all_news.extend(av_summary.top_news)
+            sources_used.append(f"Alpha Vantage ({av_summary.total_news_count}개)")
+            print(f"   ✅ Alpha Vantage: {av_summary.total_news_count}개")
+        
+        # 2. Yahoo Finance 뉴스 수집 (보완용)
+        if use_yahoo and YFINANCE_AVAILABLE:
+            print("\n🔄 Source 2: Yahoo Finance")
+            yahoo_news = self.yahoo_collector.get_market_news(limit_per_ticker=2)
+            if yahoo_news:
+                all_news.extend(yahoo_news)
+                sources_used.append(f"Yahoo Finance ({len(yahoo_news)}개)")
+                print(f"   ✅ Yahoo Finance: {len(yahoo_news)}개")
+        
+        # 통합 분석
+        print(f"\n📊 통합 분석 중... (총 {len(all_news)}개)")
+        combined_summary = self._analyze_combined_news(all_news, sources_used)
         
         # 브리핑 텍스트 생성
-        briefing = self._format_briefing(summary)
+        briefing = self._format_briefing(combined_summary, sources_used)
         
         return briefing
     
-    def _format_briefing(self, summary: MarketNewsSummary) -> str:
+    def _analyze_combined_news(self, news_list: List[NewsItem], sources: List[str]) -> MarketNewsSummary:
+        """Alpha Vantage + Yahoo Finance 통합 뉴스 분석"""
+        if not news_list:
+            return MarketNewsSummary(
+                collection_time=datetime.now().isoformat(),
+                market_impact="정보없음"
+            )
+        
+        # 중복 제거 (제목 기준)
+        seen_titles = set()
+        unique_news = []
+        for news in news_list:
+            title_key = news.title.lower()[:50]  # 앞 50자 기준
+            if title_key not in seen_titles:
+                seen_titles.add(title_key)
+                unique_news.append(news)
+        
+        # 감성 분포 집계
+        bullish = sum(1 for n in unique_news if n.sentiment_score > 0.15)
+        bearish = sum(1 for n in unique_news if n.sentiment_score < -0.15)
+        neutral = len(unique_news) - bullish - bearish
+        
+        # 평균 감성 점수 (Yahoo 뉴스는 0점으로 처리될 수 있음)
+        sentiment_scores = [n.sentiment_score for n in unique_news if n.sentiment_score != 0]
+        avg_sentiment = sum(sentiment_scores) / len(sentiment_scores) if sentiment_scores else 0
+        
+        # 영향도 점수
+        impact_score = avg_sentiment * 10
+        
+        # 영향도 판정
+        if impact_score > 3:
+            market_impact = "강세"
+        elif impact_score > 1:
+            market_impact = "약강세"
+        elif impact_score < -3:
+            market_impact = "약세"
+        elif impact_score < -1:
+            market_impact = "약약세"
+        else:
+            market_impact = "중립"
+        
+        # 리스크 요인 식별
+        risk_keywords = [
+            'war', 'conflict', 'attack', 'strike', 'bombing',
+            'iran', 'israel', 'hamas', 'ukraine', 'russia',
+            'inflation', 'recession', 'crisis', 'sanctions',
+            'tariff', 'trade war', 'supply chain',
+            'middle east', 'oil', 'energy', 'rate hike'
+        ]
+        risk_factors = []
+        
+        for news in unique_news:
+            title_lower = news.title.lower()
+            summary_lower = news.summary.lower() if news.summary else ""
+            for keyword in risk_keywords:
+                if keyword in title_lower or keyword in summary_lower:
+                    risk_factors.append(f"{keyword}: {news.title[:50]}...")
+                    break
+        
+        risk_factors = list(set(risk_factors))[:5]
+        
+        # 지정학적 리스크 수준
+        if len(risk_factors) >= 3:
+            geo_risk = "심각"
+        elif len(risk_factors) >= 2:
+            geo_risk = "위험"
+        elif len(risk_factors) >= 1:
+            geo_risk = "주의"
+        else:
+            geo_risk = "정상"
+        
+        # 상위 뉴스 정렬
+        top_news = sorted(unique_news, key=lambda x: abs(x.sentiment_score), reverse=True)[:5]
+        
+        summary = MarketNewsSummary(
+            collection_time=datetime.now().isoformat(),
+            total_news_count=len(unique_news),
+            bullish_count=bullish,
+            bearish_count=bearish,
+            neutral_count=neutral,
+            avg_sentiment=avg_sentiment,
+            market_impact=market_impact,
+            impact_score=impact_score,
+            top_news=top_news,
+            geopolitical_risk=geo_risk,
+            risk_factors=risk_factors
+        )
+        
+        return summary
+    
+    def _format_briefing(self, summary: MarketNewsSummary, sources: List[str] = None) -> str:
         """브리핑 텍스트 포맷팅"""
         lines = []
         
@@ -376,15 +572,27 @@ class NewsBriefingGenerator:
         lines.append("="*60)
         lines.append(f"\n🕐 수집시간: {summary.collection_time[:19]}")
         
+        # 뉴스 소스 정보 (v1.1 추가)
+        if sources:
+            lines.append(f"\n📡 수집 소스:")
+            for source in sources:
+                lines.append(f"   • {source}")
+        
         # 시장 영향 요약
         lines.append(f"\n📊 시장 영향 판정: {summary.market_impact}")
+        lines.append(f"   영향 점수: {summary.impact_score:+.1f}/10")
         
         # 감성 분포
-        lines.append(f"\n💭 뉴스 감성 분포:")
-        lines.append(f"   • 긍정: {summary.bullish_count}개")
-        lines.append(f"   • 부정: {summary.bearish_count}개")
-        lines.append(f"   • 중립: {summary.neutral_count}개")
-        lines.append(f"   • 평균 감성: {summary.avg_sentiment:+.2f}")
+        total = summary.total_news_count
+        if total > 0:
+            bull_pct = (summary.bullish_count / total) * 100
+            bear_pct = (summary.bearish_count / total) * 100
+            neut_pct = (summary.neutral_count / total) * 100
+            lines.append(f"\n💭 뉴스 감성 분포 (총 {total}개):")
+            lines.append(f"   🟢 긍정: {summary.bullish_count}개 ({bull_pct:.0f}%)")
+            lines.append(f"   🔴 부정: {summary.bearish_count}개 ({bear_pct:.0f}%)")
+            lines.append(f"   ⚪ 중립: {summary.neutral_count}개 ({neut_pct:.0f}%)")
+        lines.append(f"   📈 평균 감성: {summary.avg_sentiment:+.2f}")
         
         # 지정학적 리스크
         emoji = {"정상": "🟢", "주의": "🟡", "위험": "🟠", "심각": "🔴"}
@@ -438,20 +646,56 @@ class NewsBriefingGenerator:
 
 def test_news_collection():
     """뉴스 수집 테스트"""
-    print("\n" + "="*60)
-    print("🧪 반디 뉴스 수집 모듈 테스트")
-    print("="*60)
+    print("\n" + "="*70)
+    print("🧪 반디 뉴스 수집 모듈 v1.1 테스트")
+    print("📝 Alpha Vantage + Yahoo Finance 통합")
+    print("="*70)
     
     generator = NewsBriefingGenerator()
     
-    # 브리핑 생성
-    briefing = generator.generate_market_news_briefing()
+    # 브리핑 생성 (Yahoo Finance 포함)
+    briefing = generator.generate_market_news_briefing(use_yahoo=True)
     print(briefing)
     
     # 파일 저장
     generator.save_briefing(briefing)
     
-    print("\n✅ 테스트 완료!")
+    # Yahoo Finance만 테스트 (선택적)
+    print("\n" + "="*70)
+    print("🧪 Yahoo Finance 단독 테스트")
+    print("="*70)
+    
+    yahoo = YahooFinanceNewsCollector()
+    if YFINANCE_AVAILABLE:
+        # 특정 종목 뉴스 테스트
+        print("\n🔍 TSLA 뉴스 테스트:")
+        tsla_news = yahoo.get_ticker_news("TSLA", limit=3)
+        for i, news in enumerate(tsla_news, 1):
+            print(f"   {i}. {news.title[:50]}...")
+            print(f"      출처: {news.source}")
+        
+        # 섹터 뉴스 테스트
+        print("\n🔍 반도체 섹터 뉴스 테스트:")
+        chip_news = yahoo.get_sector_news("반도체", limit=5)
+        print(f"   ✅ {len(chip_news)}개 수집 완료")
+    
+    print("\n✅ 모든 테스트 완료!")
+
+
+def quick_news_check():
+    """빠른 뉴스 확인 - 명령줄용"""
+    print("\n" + "="*70)
+    print("📰 반디 뉴스 브리핑 (빠른 확인)")
+    print("="*70)
+    
+    generator = NewsBriefingGenerator()
+    briefing = generator.generate_market_news_briefing(use_yahoo=True)
+    print(briefing)
+    
+    # 파일로도 저장
+    generator.save_briefing(briefing)
+    
+    return briefing
 
 
 if __name__ == "__main__":
