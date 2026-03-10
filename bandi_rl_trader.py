@@ -257,8 +257,8 @@ class StockTradingEnv(gym.Env):
         # Market Intelligence
         self.market_intel = MarketIntelligence()
         
-        # 상태 공간: 기술지표 + 시장 데이터 + 포트폴리오
-        n_features = 15  # 기술지표 10 + 시장 3 + 포트폴리오 2
+        # 상태 공간: 기술지표 + 시장 데이터 + 포트폴리오 + 진입전략
+        n_features = 20  # 기술지표 10 + 시장 3 + 포트폴리오 2 + 진입전략 5
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, 
             shape=(window_size, n_features), 
@@ -292,7 +292,7 @@ class StockTradingEnv(gym.Env):
             return None
     
     def _get_observation(self):
-        """현재 상태 반환"""
+        """현재 상태 반환 (진입전략 State 통합)"""
         # window_size 기간의 데이터
         start_idx = self.current_step - self.window_size
         end_idx = self.current_step
@@ -340,8 +340,89 @@ class StockTradingEnv(gym.Env):
         for pf in [position_ratio, self.balance / self.initial_balance - 1]:
             features.append(np.full(self.window_size, pf))
         
+        # 4. 진입전략 특성 (5개) - 파파가 알려준 전략 반영
+        entry_signals = self._calculate_entry_signals(window_data)
+        for signal in entry_signals:
+            features.append(np.full(self.window_size, signal))
+        
         obs = np.column_stack(features).astype(np.float32)
         return obs
+    
+    def _calculate_entry_signals(self, window_data: pd.DataFrame) -> list:
+        """진입전략 신호 계산 - 파파의 검증된 전략"""
+        if len(window_data) < 5:
+            return [0, 0, 0, 0, 0]  # 데이터 부족시 중립
+        
+        current = window_data.iloc[-1]
+        prev = window_data.iloc[-2] if len(window_data) >= 2 else current
+        
+        # 1. 돌파 (Breakout) 신호
+        breakout = 0
+        if 'bb_position' in window_data.columns and 'volume_ratio' in window_data.columns:
+            bb_pos = current['bb_position']
+            vol_ratio = current['volume_ratio']
+            # 볼린저 상단 돌파 + 거래량 급증
+            if bb_pos > 0.7 and vol_ratio > 1.5:
+                breakout = 1  # 강한 돌파
+            # 52주 고점 근접 (시뮬레이션, 20일 중 최고)
+            if 'High' in window_data.columns:
+                recent_high = window_data['High'].tail(20).max()
+                if current['Close'] >= recent_high * 0.98:
+                    breakout = min(breakout + 0.5, 1)  # 고점 근접
+        
+        # 2. 눌림 (Pullback) 신호
+        pullback = 0
+        if 'rsi' in window_data.columns and 'ma_ratio' in window_data.columns:
+            rsi = current['rsi']
+            ma_ratio = current['ma_ratio']
+            # RSI 과매수 영역에서 지지 + 이평선 상승
+            if 30 < rsi < 50 and ma_ratio > 1.0:
+                pullback = 1  # 눌림 매수
+            # 볼린저 중간선 근처 지지
+            if 'bb_position' in window_data.columns:
+                bb_pos = current['bb_position']
+                if 0.4 < bb_pos < 0.6 and current['Close'] > prev['Close']:
+                    pullback = min(pullback + 0.5, 1)
+        
+        # 3. 추세 전환 (Reversal) 신호
+        reversal = 0
+        if len(window_data) >= 5:
+            recent_lows = window_data['Low'].tail(5).values
+            recent_highs = window_data['High'].tail(5).values
+            # 1-2-3 저점 상승 (Higher Low)
+            if len(recent_lows) >= 3:
+                if recent_lows[-1] > recent_lows[-3]:  # Higher Low
+                    if recent_lows[-2] > recent_lows[-3]:  # 확인
+                        reversal = 0.5  # 추세 전환 초입
+            # MACD 턴어라운드
+            if 'macd' in window_data.columns and 'macd_hist' in window_data.columns:
+                macd_hist = window_data['macd_hist'].values
+                if len(macd_hist) >= 3:
+                    if macd_hist[-2] < 0 and macd_hist[-1] > macd_hist[-2]:
+                        reversal = min(reversal + 0.5, 1)  # MACD 상승
+        
+        # 4. 상대강도 (Relative Strength)
+        rs = 0
+        if 'return_5d' in window_data.columns:
+            stock_return = current.get('return_5d', 0)
+            spy_return = market_data.get('spy_change', 0) / 100 * 5  # 5일 시장 수익률 추정
+            if stock_return > spy_return:
+                rs = 1  # 시장 대비 우위
+            elif stock_return > spy_return * 0.5:
+                rs = 0.5  # 양호
+        
+        # 5. 거래량 급증 (Volume Spike)
+        volume_spike = 0
+        if 'volume_ratio' in window_data.columns:
+            vol = current['volume_ratio']
+            if vol > 2.0:
+                volume_spike = 1  # 매우 강한 거래량
+            elif vol > 1.5:
+                volume_spike = 0.7  # 강한 거래량
+            elif vol > 1.0:
+                volume_spike = 0.3  # 평균 이상
+        
+        return [breakout, pullback, reversal, rs, volume_spike]
     
     def reset(self, seed=None, options=None):
         """환경 초기화"""
@@ -456,8 +537,8 @@ class BandiRLTrader:
             verbose=0  # 로그 출력 최소화
         )
         
-        # 학습
-        model.learn(total_timesteps=total_timesteps, progress_bar=True)
+        # 학습 (GitHub Actions 호환 - progress_bar 비활성화)
+        model.learn(total_timesteps=total_timesteps, progress_bar=False)
         
         # 저장
         if save:
