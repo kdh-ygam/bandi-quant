@@ -1,0 +1,51 @@
+name: RL Backtest Trained Models
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest-models:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Download trained models
+      run: |
+        mkdir -p trained_models
+        # Get the latest successful training run
+        RUN_ID=$(gh run list --workflow="Train RL Trader All Stocks" --status=success --limit=1 --json databaseId -q '.[0].databaseId')
+        echo "Using run ID: $RUN_ID"
+        
+        # Download models from each successful group
+        for artifact in rl-models-ai rl-models-auto rl-models-battery rl-models-bio rl-models-energy rl-models-semiconductor; do
+          gh run download $RUN_ID --name $artifact --dir ./trained_models/ 2>/dev/null || echo "Artifact $artifact not found"
+        done
+        
+        ls -la trained_models/
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Run backtesting
+      run: |
+        python3 backtest_rl_trained.py
+    
+    - name: Upload backtest results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-backtest-results
+        path: |
+          backtest_results.json
+          backtest_summary.txt
+    
+    - name: Display results
+      run: |
+        cat backtest_summary.txt
