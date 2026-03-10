@@ -30,7 +30,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install yfinance pandas numpy requests python-telegram-bot
-        pip install matplotlib mplfinance
+        pip install matplotlib mplfinance beautifulsoup4
         pip install scikit-learn || echo "sklearn optional"
     
     - name: Run daily briefing
@@ -41,7 +41,7 @@ jobs:
         NAVER_CLOVA_CLIENT_SECRET: ${{ secrets.NAVER_CLOVA_CLIENT_SECRET }}
         WORKSPACE_DIR: ${{ github.workspace }}
       run: |
-        python3 bandi_quant_v40.py
+        python3 bandi_quant_v41.py
     
     - name: Upload analysis results
       uses: actions/upload-artifact@v4
