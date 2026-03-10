@@ -1,0 +1,76 @@
+name: RL Training v2.0 - Aggressive 🚀
+
+on:
+  workflow_dispatch:
+
+jobs:
+  train-rl-v2:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        group: [ai, auto, battery, bio, energy, semiconductor]
+      fail-fast: false
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Restore training progress
+      uses: actions/cache@v3
+      with:
+        path: |
+          rl_models_v2/
+          training_progress_v2.json
+        key: rl-training-v2-${{ matrix.group }}-${{ github.run_id }}
+        restore-keys: |
+          rl-training-v2-
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v2
+    
+    - name: Train ${{ matrix.group }} stocks (Aggressive v2.0)
+      run: |
+        python3 train_group_v2.py --group ${{ matrix.group }}
+      env:
+        PYTHONUNBUFFERED: "1"
+        RL_AGGRESSIVE: "true"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v2-models-${{ matrix.group }}
+        path: rl_models_v2/bandi_rl_*.zip
+        retention-days: 30
+    
+    - name: Upload training log
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v2-training-log-${{ matrix.group }}
+        path: |
+          training_results_v2.json
+          training_progress_v2.json
+        retention-days: 30
+    
+    - name: Check progress
+      run: |
+        if [ -f training_progress_v2.json ]; then
+          cat training_progress_v2.json | python3 -m json.tool
+        fi
