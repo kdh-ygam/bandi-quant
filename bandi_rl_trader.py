@@ -456,8 +456,8 @@ class BandiRLTrader:
             verbose=0  # 로그 출력 최소화
         )
         
-        # 학습
-        model.learn(total_timesteps=total_timesteps, progress_bar=True)
+        # 학습 (GitHub Actions 호환 - progress_bar 비활성화)
+        model.learn(total_timesteps=total_timesteps, progress_bar=False)
         
         # 저장
         if save:
