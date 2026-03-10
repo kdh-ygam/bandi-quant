@@ -2,22 +2,20 @@
 """
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                    반디 퀀트 (BANDI QUANT) v4.1                      ║
-║         🤖 AI 예측 + 📰 뉴스 분석 통합 시스템                      ║
+║         🤖 AI 예측 + 뉴스 분석 + 정세 브리핑 통합 시스템            ║
 ║                                                                      ║
-║  🎯 v4.1 핵심 업데이트:                                             ║
-║  • ✅ 뉴스 수집 모듈 통합 (v1.0) - 파 특별 요청                   ║
-║  • ✅ 시장 영향 뉴스 자동 파악                                     ║
-║  • ✅ 지정학적/경제적 리스크 감지                                  ║
-║  • ✅ 뉴스 기반 매매 전략 조정                                    ║
-║  • ✅ 14가지 고급 캔들 패턴 자동 감지                           ║
-║  • ✅ 24가지 기술지표 기반 ML 예측                               ║
-║  • ✅ 43개 종목 분석 + 뉴스 브리핑 동시 제공                     ║
+║  🎯 v4.1 핵심 업데이트:                                              ║
+║  • ✅ 뉴스 수집 및 감성분석 (NEW)                                   ║
+║  • ✅ 지정학적/경제정책 리스크 체크 (NEW)                           ║
+║  • ✅ 시장 종합 의견 생성 (NEW)                                     ║
+║  • ✅ 43개 전체 종목 분석                                          ║
+║  • ✅ ML 예측 + 차트 통합                                          ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
 
 import os
 import json
-import subprocess
+import re
 import requests
 import numpy as np
 import pandas as pd
@@ -25,19 +23,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
-
-# 📰 뉴스 수집 모듈 임포트 (v4.1 NEW)
-try:
-    from news_collector import (
-        AlphaVantageNewsCollector,
-        YahooFinanceNewsCollector,
-        NewsBriefingGenerator,
-        MarketNewsSummary
-    )
-    NEWS_AVAILABLE = True
-except ImportError:
-    NEWS_AVAILABLE = False
-    print("⚠️ news_collector 미설치 - 뉴스 생략")
+from bs4 import BeautifulSoup
 
 try:
     from sklearn.ensemble import RandomForestClassifier
@@ -61,12 +47,16 @@ CHART_DIR = os.path.join(WORKSPACE_DIR, "charts")
 os.makedirs(CHART_DIR, exist_ok=True)
 
 # 텔레그램 설정
-TELEGRAM_TOKEN = "8599663503:AAGfs7Sh2vy6tfHOr9UG-O_lcaG3cjPdH2s"
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-CHAT_ID = "6146433054"
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+# 뉴스 API 설정 (추가)
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY", "")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "")
 
 # ============================================
-# 📊 43개 전체 종목 리스트 (2026-02-28 확장)
+# 📊 43개 전체 종목 리스트
 # ============================================
 STOCKS = {
     # 반도체 (7개)
@@ -83,7 +73,7 @@ STOCKS = {
     "207940.KS": {"name": "삼성바이오로직스", "sector": "바이오", "desc": "CDMO 1위"},
     "196170.KS": {"name": "알테오젠", "sector": "바이오", "desc": "바이오시밀러"},
     "136480.KS": {"name": "하나제약", "sector": "바이오", "desc": "신약 개발 파이프라인"},
-    "JNJ": {"name": "Johnson & Johnson", "sector": "바이오", "desc": " diversified 헬스케어"},
+    "JNJ": {"name": "Johnson & Johnson", "sector": "바이오", "desc": "diversified 헬스케어"},
     
     # 전력/인프라 (7개)
     "010120.KS": {"name": "LS ELECTRIC", "sector": "전력", "desc": "전력설비/스마트그리드"},
@@ -92,14 +82,13 @@ STOCKS = {
     "052690.KS": {"name": "한전기술", "sector": "전력", "desc": "전력엔지니어링"},
     "003670.KS": {"name": "포스코DX", "sector": "인프라", "desc": "스마트팩토리"},
     "NEE": {"name": "NextEra Energy", "sector": "전력", "desc": "재생에너지 최대"},
-    "TE": {"name": "T1 Energy", "sector": "전력", "desc": " 태양광/에너지 저장"},
+    "TSLA": {"name": "Tesla", "sector": "자동차", "desc": "글로벌 EV 1위"},
     
-    # 자동차 (8개)
+    # 자동차 (7개)
     "005380.KS": {"name": "현대차", "sector": "자동차", "desc": "글로벌 EV 확대"},
     "000270.KS": {"name": "기아", "sector": "자동차", "desc": "전기차 판매 호조"},
     "012330.KS": {"name": "현대모비스", "sector": "자동차", "desc": "자동차 부품"},
     "003620.KS": {"name": "KG모빌리티", "sector": "자동차", "desc": "중형 상용차"},
-    "TSLA": {"name": "Tesla", "sector": "자동차", "desc": "글로벌 EV 1위"},
     "F": {"name": "Ford", "sector": "자동차", "desc": "F-150 Lightning"},
     "GM": {"name": "General Motors", "sector": "자동차", "desc": "전기차 전환 가속"},
     "RIVN": {"name": "Rivian", "sector": "자동차", "desc": "전기 픽업/SUV"},
@@ -118,8 +107,9 @@ STOCKS = {
     "FSLR": {"name": "First Solar", "sector": "클린에너지", "desc": "Thin-film 태양광"},
     "RUN": {"name": "Sunrun", "sector": "클린에너지", "desc": "住宅 태양광 설치"},
     "BE": {"name": "Bloom Energy", "sector": "클린에너지", "desc": "연료전지"},
+    "NEE": {"name": "NextEra Energy", "sector": "클린에너지", "desc": "재생에너지"},
     
-    # AI/소프트웨어 (6개)
+    # AI/소프트웨어 (5개)
     "PLTR": {"name": "Palantir", "sector": "AI", "desc": "빅데이터/AI 플랫폼"},
     "AI": {"name": "C3.ai", "sector": "AI", "desc": "엔터프라이즈 AI"},
     "SNOW": {"name": "Snowflake", "sector": "AI", "desc": "클라우드 데이터"},
@@ -130,7 +120,7 @@ STOCKS = {
 
 @dataclass
 class StockAnalysis:
-    """v4.0 통합 분석 데이터"""
+    """v4.1 통합 분석 데이터"""
     ticker: str
     name: str
     sector: str
@@ -150,9 +140,9 @@ class StockAnalysis:
     patterns: List[Dict] = field(default_factory=list)
     pattern_summary: str = ""
     
-    # ML 예측 (v4.0 NEW)
-    ml_prediction: str = ""  # "상승" or "하�"
-    ml_confidence: float = 0.5  # 0.0 ~ 1.0
+    # ML 예측
+    ml_prediction: str = ""
+    ml_confidence: float = 0.5
     ml_features: Dict = field(default_factory=dict)
     
     # 반디 AI 의견
@@ -161,70 +151,311 @@ class StockAnalysis:
     recommendation: str = ""
 
 
+@dataclass
+class MarketNews:
+    """시장 뉴스 데이터"""
+    geopolitical_risk: str = "보통"
+    fed_policy: str = "중립"
+    major_events: List[str] = field(default_factory=list)
+    sentiment: str = "중립"
+    vix_level: float = 20.0
+    oil_price: float = 75.0
+
+
+# ============================================
+# 📰 뉴스 분석 모듈 (v4.1 NEW)
+# ============================================
+class MarketIntelligence:
+    """시장 정세 분석기"""
+    
+    # 지정학적 리스크 키워드
+    GEOPOLITICAL_KEYWORDS = {
+        "high": ["war", "conflict", "attack", "sanctions", "invasion", "missile", "bomb", "ceasefire", "iran", "middle east"],
+        "medium": ["tension", "dispute", "crisis", "border", "military", "threat"],
+        "oil_sensitive": ["opec", "oil supply", "energy crisis", "saudi", "gaza", "ukraine"]
+    }
+    
+    # Fed/경제정책 키워드
+    FED_KEYWORDS = {
+        "hawkish": ["rate hike", "tightening", "higher rates", "inflation fight", "fed chair hawkish"],
+        "dovish": ["rate cut", "easing", "pivot", "soft landing", "fed chair dovish"],
+        "neutral": ["pause", "hold rates", "data dependent", "wait and see"]
+    }
+    
+    def __init__(self):
+        self.news_cache = []
+        self.vix_data = None
+        self.oil_data = None
+    
+    def fetch_vix_data(self) -> float:
+        """VIX 지수 가져오기"""
+        try:
+            vix = yf.Ticker("^VIX")
+            hist = vix.history(period="1d")
+            if len(hist) > 0:
+                return float(hist['Close'].iloc[-1])
+        except:
+            pass
+        return 20.0
+    
+    def fetch_oil_price(self) -> float:
+        """유가 가져오기"""
+        try:
+            oil = yf.Ticker("CL=F")
+            hist = oil.history(period="1d")
+            if len(hist) > 0:
+                return float(hist['Close'].iloc[-1])
+        except:
+            pass
+        return 75.0
+    
+    def fetch_yfinance_news(self, symbol: str = "SPY") -> List[Dict]:
+        """yfinance 뉴스 수집"""
+        news_items = []
+        try:
+            ticker = yf.Ticker(symbol)
+            news = ticker.news
+            if news:
+                for item in news[:5]:
+                    news_items.append({
+                        'title': item.get('title', ''),
+                        'publisher': item.get('publisher', ''),
+                        'published': item.get('published', '')
+                    })
+        except Exception as e:
+            print(f"⚠️ yfinance 뉴스 오류: {e}")
+        return news_items
+    
+    def analyze_geopolitical_risk(self, news_items: List[Dict]) -> Tuple[str, List[str]]:
+        """지정학적 리스크 분석"""
+        risk_score = 0
+        risk_events = []
+        
+        for news in news_items:
+            title_lower = news['title'].lower()
+            
+            # High risk keywords
+            for keyword in self.GEOPOLITICAL_KEYWORDS["high"]:
+                if keyword in title_lower:
+                    risk_score += 3
+                    if keyword.title() not in risk_events:
+                        risk_events.append(f"🚨 {keyword.title()} related tensions")
+            
+            # Medium risk
+            for keyword in self.GEOPOLITICAL_KEYWORDS["medium"]:
+                if keyword in title_lower:
+                    risk_score += 1
+            
+            # Oil sensitive (market impact)
+            for keyword in self.GEOPOLITICAL_KEYWORDS["oil_sensitive"]:
+                if keyword in title_lower and "oil" in title_lower:
+                    risk_score += 2
+                    if "Oil/energy concerns" not in risk_events:
+                        risk_events.append("⛽ Oil/energy supply concerns")
+        
+        # Risk level
+        if risk_score >= 6:
+            return "🔴 높음", risk_events
+        elif risk_score >= 3:
+            return "🟡 주의", risk_events
+        else:
+            return "🟢 안정", risk_events or ["No major geopolitical events"]
+    
+    def analyze_fed_policy(self, news_items: List[Dict]) -> str:
+        """Fed 정책 분석"""
+        hawkish_score = 0
+        dovish_score = 0
+        
+        for news in news_items:
+            title_lower = news['title'].lower()
+            
+            for kw in self.FED_KEYWORDS["hawkish"]:
+                if kw in title_lower:
+                    hawkish_score += 1
+            for kw in self.FED_KEYWORDS["dovish"]:
+                if kw in title_lower:
+                    dovish_score += 1
+        
+        if hawkish_score > dovish_score:
+            return "🦅 매파 (긴축 우려)"
+        elif dovish_score > hawkish_score:
+            return "🕊️ 비둘기파 (완화 기대)"
+        else:
+            return "⚖️ 중립 (관망)"
+    
+    def get_market_overview(self) -> str:
+        """시장 개요 문자열"""
+        try:
+            spy = yf.Ticker("SPY")
+            spy_hist = spy.history(period="2d")
+            if len(spy_hist) >= 2:
+                spy_change = ((spy_hist['Close'].iloc[-1] / spy_hist['Close'].iloc[-2]) - 1) * 100
+            else:
+                spy_change = 0
+            
+            nasdaq = yf.Ticker("QQQ")
+            nasdaq_hist = nasdaq.history(period="2d")
+            if len(nasdaq_hist) >= 2:
+                nasdaq_change = ((nasdaq_hist['Close'].iloc[-1] / nasdaq_hist['Close'].iloc[-2]) - 1) * 100
+            else:
+                nasdaq_change = 0
+            
+            return f"S&P500: {spy_change:+.2f}% | Nasdaq: {nasdaq_change:+.2f}%"
+        except:
+            return "시장 데이터 수집 중..."
+    
+    def generate_market_intelligence(self) -> MarketNews:
+        """통합 시장 정세 분석"""
+        print("📰 시장 정세 분석 중...")
+        
+        # 뉴스 수집
+        spy_news = self.fetch_yfinance_news("SPY")
+        qqq_news = self.fetch_yfinance_news("QQQ")
+        nvda_news = self.fetch_yfinance_news("NVDA")
+        news_items = spy_news + qqq_news + nvda_news
+        
+        # 시장 데이터
+        vix = self.fetch_vix_data()
+        oil = self.fetch_oil_price()
+        
+        # 분석
+        geo_risk, events = self.analyze_geopolitical_risk(news_items)
+        fed = self.analyze_fed_policy(news_items)
+        
+        # 감성 판단
+        if vix > 25:
+            sentiment = "🔴 공포"
+        elif vix > 20:
+            sentiment = "🟡 불안"
+        elif vix < 15:
+            sentiment = "🟢 탐욕"
+        else:
+            sentiment = "⚪ 중립"
+        
+        return MarketNews(
+            geopolitical_risk=geo_risk,
+            fed_policy=fed,
+            major_events=events[-3:] if events else ["No major overnight events"],
+            sentiment=sentiment,
+            vix_level=vix,
+            oil_price=oil
+        )
+    
+    def generate_market_opinion(self, mkt: MarketNews, avg_rsi: float, ml_bullish: int, ml_bearish: int) -> Tuple[str, str]:
+        """시장 종합 의견 생성"""
+        
+        factors = []
+        strategy = ""
+        
+        # VIX 기반
+        if mkt.vix_level > 25:
+            factors.append("VIX 25+로 시장 공포 지수 높음")
+        elif mkt.vix_level < 15:
+            factors.append("VIX 15-로 시장 안정적")
+        
+        # 지정학적 리스크
+        if "높음" in mkt.geopolitical_risk:
+            factors.append("지정학적 리스크 고조")
+        elif "주의" in mkt.geopolitical_risk:
+            factors.append("지정학적 리스크 존재")
+        
+        # Fed 정책
+        if "매파" in mkt.fed_policy:
+            factors.append("Fed 매파基調")
+        elif "비둘기파" in mkt.fed_policy:
+            factors.append("Fed 완화 기대감")
+        
+        # RSI
+        if avg_rsi < 40:
+            factors.append("과매도 구간, 반등 가능성")
+        elif avg_rsi > 60:
+            factors.append("과매수 구간, 조정 가능성")
+        
+        # ML 예측
+        total_ml = ml_bullish + ml_bearish
+        if total_ml > 0:
+            bull_ratio = ml_bullish / total_ml
+            if bull_ratio > 0.6:
+                factors.append(f"ML 예측 상승 우세 ({bull_ratio:.0%})")
+            elif bull_ratio < 0.4:
+                factors.append(f"ML 예측 하락 우세 ({1-bull_ratio:.0%})")
+        
+        # 종합 판단
+        if mkt.vix_level > 25 or "높음" in mkt.geopolitical_risk:
+            opinion = "⚠️ 매우 위험"
+            strategy = "현금 비중 확대, 공격적 포지션 축소"
+        elif mkt.vix_level > 20 or "주의" in mkt.geopolitical_risk or "매파" in mkt.fed_policy:
+            opinion = "🟡 관망 우선"
+            strategy = "신규 매수 보류, 기존 포지션 관리"
+        elif avg_rsi < 40 and ml_bullish > ml_bearish:
+            opinion = "🟢 매수 기회"
+            strategy = "분할 매수로 공격적 대응"
+        elif avg_rsi > 60:
+            opinion = "🟠 수익 실현"
+            strategy = "익절 및 비중 조절"
+        else:
+            opinion = "⚪ 중립 관망"
+            strategy = "현재 포지션 유지"
+        
+        return opinion, strategy
+
+
+# ============================================
+# 🎯 기존 모듈들 (FeatureEngineer, MLPredictor, PatternDetector, BandiAI)
+# ============================================
 class FeatureEngineer:
     """24가지 기술지표 생성기"""
     
     def _flatten_columns(self, df):
-        """멀티인덱스 컬럼을 플래튼"""
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         return df
     
     def calculate_all_features(self, df):
-        """모든 특성 계산"""
         df = df.copy()
         df = self._flatten_columns(df)
         
-        # RSI
         delta = df['Close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['rsi'] = 100 - (100 / (1 + rs))
         
-        # 이동평균
         df['ma_5'] = df['Close'].rolling(window=5).mean()
         df['ma_20'] = df['Close'].rolling(window=20).mean()
         df['ma_ratio'] = df['ma_5'] / df['ma_20']
         
-        # MACD
         ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
         ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
         df['macd'] = ema_12 - ema_26
         df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
         df['macd_hist'] = df['macd'] - df['macd_signal']
         
-        # 볼린저밴드
         df['bb_middle'] = df['Close'].rolling(window=20).mean()
         bb_std = df['Close'].rolling(window=20).std()
         df['bb_upper'] = df['bb_middle'] + (bb_std * 2)
         df['bb_lower'] = df['bb_middle'] - (bb_std * 2)
         df['bb_position'] = (df['Close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
         
-        # 거래량
         df['volume_ma'] = df['Volume'].rolling(window=20).mean()
         df['volume_ratio'] = df['Volume'] / df['volume_ma']
         
-        # 수익률
         df['return_1d'] = df['Close'].pct_change(1)
         df['return_5d'] = df['Close'].pct_change(5)
         df['return_20d'] = df['Close'].pct_change(20)
         df['volatility'] = df['return_1d'].rolling(window=20).std()
         
-        # 스토캐스틱
         low_min = df['Low'].rolling(window=14).min()
         high_max = df['High'].rolling(window=14).max()
         df['stoch_k'] = 100 * (df['Close'] - low_min) / (high_max - low_min)
         df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
         
-        # 목표변수 (5일 후 상승/하락)
         df['future_return'] = df['Close'].shift(-5).pct_change(5)
         df['target'] = np.where(df['future_return'] > 0, 1, 0)
         
         return df
     
     def get_feature_columns(self):
-        """특성 컬럼명 반환"""
         return ['rsi', 'ma_ratio', 'macd', 'macd_hist', 'bb_position', 
                 'volume_ratio', 'return_5d', 'return_20d', 'volatility', 
                 'stoch_k', 'stoch_d']
@@ -239,15 +470,13 @@ class MLPredictor:
         self.is_trained = False
     
     def train_global_model(self):
-        """여러 종목으로 글로벌 모델 학습"""
         print("🤖 글로벌 ML 모델 학습 중...")
         
         if not SKLEARN_AVAILABLE:
-            print("   ⚠️ sklearn 미설치, 규칙 기반 예측 사용")
+            print("   ⚠️ sklearn 미설치")
             self._create_simple_model()
             return
         
-        # 학습용 대표 종목들
         training_tickers = ['SPY', 'QQQ', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'PLTR']
         all_data = []
         
@@ -262,14 +491,10 @@ class MLPredictor:
                 continue
         
         if not all_data:
-            print("   ⚠️ 학습 데이터 부족, 간단 모델 사용")
             self._create_simple_model()
             return
         
-        # 데이터 결합
         combined = pd.concat(all_data, ignore_index=True)
-        
-        # 특성 준비
         feature_cols = self.featurizer.get_feature_columns()
         combined = combined.dropna()
         
@@ -277,59 +502,41 @@ class MLPredictor:
         y = combined['target']
         
         if len(X) < 100:
-            print(f"   ⚠️ 샘플 부족 ({len(X)}개), 간단 모델 사용")
             self._create_simple_model()
             return
         
-        # 학습/테스트 분할
         split_idx = int(len(X) * 0.8)
         X_train, X_test = X.iloc[:split_idx], X.iloc[split_idx:]
         y_train, y_test = y.iloc[:split_idx], y.iloc[split_idx:]
         
-        # Random Forest 학습
         self.model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=5,
-            min_samples_split=20,
-            random_state=42
+            n_estimators=100, max_depth=5, min_samples_split=20, random_state=42
         )
         self.model.fit(X_train, y_train)
         
-        # 성능 평가
-        train_acc = self.model.score(X_train, y_train)
         test_acc = self.model.score(X_test, y_test)
-        
-        print(f"   📊 학습 정확도: {train_acc:.1%}")
         print(f"   📊 테스트 정확도: {test_acc:.1%}")
         self.is_trained = True
     
     def _create_simple_model(self):
-        """규칙 기반 단순 모델"""
         self.is_trained = False
-        print("   ℹ️ 규칙 기반 예측 사용")
     
     def predict(self, df):
-        """종목 예측"""
         if len(df) < 30:
             return "N/A", 0.5, {}
         
-        # 특성 계산
         df_features = self.featurizer.calculate_all_features(df)
         feature_cols = self.featurizer.get_feature_columns()
         
-        # 최신 데이터
         latest = df_features.dropna().iloc[-1:]
         if len(latest) == 0:
             return "N/A", 0.5, {}
         
-        # 특성 값 추출
         features = {col: latest[col].iloc[0] for col in feature_cols}
         
         if not self.is_trained:
-            # 규칙 기반 예측
             return self._rule_based_predict(features)
         
-        # ML 예측
         X = latest[feature_cols]
         pred = self.model.predict(X)[0]
         prob = self.model.predict_proba(X)[0]
@@ -340,7 +547,6 @@ class MLPredictor:
         return direction, confidence, features
     
     def _rule_based_predict(self, features):
-        """규칙 기반 예측 (ML 백업)"""
         score = 0.5
         
         rsi = features.get('rsi', 50)
@@ -359,9 +565,6 @@ class MLPredictor:
         if bb_pos < 0.2: score += 0.1
         elif bb_pos > 0.8: score -= 0.1
         
-        vol_ratio = features.get('volume_ratio', 1)
-        if vol_ratio > 1.5: score += 0.05
-        
         score = max(0, min(1, score))
         direction = "상승" if score > 0.5 else "하락"
         confidence = abs(score - 0.5) * 2
@@ -373,19 +576,16 @@ class PatternDetector:
     """14가지 고급 캔들 패턴 감지"""
     
     def detect_patterns(self, df):
-        """패턴 감지 - Series 값 처리 포함"""
         patterns = []
-        
         if len(df) < 3:
             return patterns
         
         def to_float(val):
-            """값을 float으로 변환"""
             if hasattr(val, 'item'):
                 return float(val.item())
             return float(val)
         
-        for i in range(2, min(len(df), 10)):  # 최근 10일만 검사
+        for i in range(2, min(len(df), 10)):
             curr = df.iloc[-i]
             prev = df.iloc[-i-1] if i+1 < len(df) else curr
             
@@ -402,25 +602,20 @@ class PatternDetector:
             if total_range == 0:
                 continue
             
-            # 망치형
             if lower_shadow > body * 2 and upper_shadow < body * 0.3 and close_c > open_c:
                 patterns.append({"name": "망치형", "signal": "매수", "strength": "강함"})
             
-            # 도지
             if body < total_range * 0.1:
                 patterns.append({"name": "도지", "signal": "관망", "strength": "중간"})
             
-            # 잉걸불
             close_p = to_float(prev['Close'])
             open_p = to_float(prev['Open'])
             if close_p < open_p and close_c > open_c and open_c < close_p and close_c > open_p:
                 patterns.append({"name": "잉걸불", "signal": "매수", "strength": "강함"})
             
-            # 드래곤플라이 도지
             if body < total_range * 0.1 and lower_shadow > total_range * 0.6:
                 patterns.append({"name": "드래곤플라이", "signal": "매수", "strength": "중간"})
             
-            # 슈팅스타
             if upper_shadow > body * 2 and lower_shadow < body * 0.3 and close_c < open_c:
                 patterns.append({"name": "슈팅스타", "signal": "매도", "strength": "중간"})
         
@@ -431,12 +626,9 @@ class BandiAI:
     """반디 AI 의견 생성"""
     
     def generate_opinion(self, analysis: StockAnalysis) -> Tuple[str, str]:
-        """AI 의견 및 전략 생성"""
-        
         factors = []
         strategy = []
         
-        # RSI 분석
         if analysis.rsi < 35:
             factors.append("RSI 과매도 구간, 반등 가능성")
             strategy.append("분할 매수 고려")
@@ -444,7 +636,6 @@ class BandiAI:
             factors.append("RSI 과매수 구간, 조정 가능성")
             strategy.append("익절 및 관망")
         
-        # ML 예측 반영
         if analysis.ml_prediction == "상승" and analysis.ml_confidence > 0.6:
             factors.append(f"ML 예측 상승 확률 {analysis.ml_confidence:.0%}")
             strategy.append("추가 매수 검토")
@@ -452,12 +643,10 @@ class BandiAI:
             factors.append(f"ML 예측 하락 확률 {analysis.ml_confidence:.0%}")
             strategy.append("매도 및 관망")
         
-        # 패턴 반영
         if analysis.patterns:
             pattern_names = [p['name'] for p in analysis.patterns[:2]]
             factors.append(f"캔들 패턴: {', '.join(pattern_names)}")
         
-        # 거래량
         if analysis.volume_ratio > 2:
             factors.append("거래량 급증, 주목 필요")
         
@@ -467,38 +656,44 @@ class BandiAI:
         return opinion, strategy_text
 
 
+# ============================================
+# 🚀 v4.1 메인 시스템
+# ============================================
 class BandiQuantV41:
-    """반디 퀀트 v4.1 - 뉴스 통합 시스템 (파 추가 요청)"""
+    """반디 퀀트 v4.1 메인 시스템 - 뉴스/정세 분석 통합"""
     
     def __init__(self):
         self.results = []
         self.ml_predictor = MLPredictor()
         self.pattern_detector = PatternDetector()
         self.bandi_ai = BandiAI()
+        self.market_intel = MarketIntelligence()  # NEW
         self.date_str = datetime.now().strftime('%Y-%m-%d')
         self.time_str = datetime.now().strftime('%H:%M')
-        self.news_summary = None  # v4.1: 뉴스 요약 저장
-        self.news_briefing = ""  # v4.1: 뉴스 브리핑 텍스트
-        
+        self.market_news = None  # NEW
+    
     def run(self):
-        """메인 실행 - 뉴스 수집 먼저! (v4.1)"""
+        """메인 실행"""
         print("=" * 70)
-        print("📊 반디 퀀트 v4.1 - AI 예측 + 뉴스 분석 브리핑")
+        print("📊 반디 퀀트 v4.1 - AI + 뉴스 + 정세 브리핑")
         print("=" * 70)
         print(f"⏰ 실행: {self.date_str} {self.time_str} KST")
-        print(f"📈 종목: {len(STOCKS)}개")
-        print(f"📰 뉴스 수집: {'✅ 활성화' if NEWS_AVAILABLE else '❌ 비활성화'}\n")
+        print(f"📈 종목: {len(STOCKS)}개\n")
         
-        # 🗞️ STEP 1: 뉴스 수집 (v4.1 NEW - 가장 먼저 실행!)
-        if NEWS_AVAILABLE:
-            self.collect_news()
+        # 🆕 시장 정세 분석 (맨 먼저 실행)
+        print("🌍 시장 정세 분석 중...")
+        self.market_news = self.market_intel.generate_market_intelligence()
+        print(f"   VIX: {self.market_news.vix_level:.1f}")
+        print(f"   유가: ${self.market_news.oil_price:.2f}")
+        print(f"   지정학적 리스크: {self.market_news.geopolitical_risk}")
+        print(f"   Fed 정책: {self.market_news.fed_policy}\n")
         
-        # 🤖 STEP 2: ML 모델 학습
-        print("\n🤖 ML 모델 초기화 중...")
+        # ML 모델 학습
+        print("🤖 ML 모델 학습 중...")
         self.ml_predictor.train_global_model()
         print()
         
-        # 📊 STEP 3: 전체 종목 분석
+        # 전체 종목 분석
         for i, (ticker, info) in enumerate(STOCKS.items(), 1):
             print(f"\r[{i}/{len(STOCKS)}] {info['name']} 분석 중...", end="", flush=True)
             analysis = self.analyze_stock(ticker, info)
@@ -507,69 +702,32 @@ class BandiQuantV41:
         
         print(f"\n\n✅ 분석 완료: {len(self.results)}개 종목")
         
-        # 📱 STEP 4: 브리핑 생성 및 전송
+        # 브리핑 생성 및 전송
         self.generate_and_send()
     
-    def collect_news(self):
-        """📰 뉴스 수집 및 분석 (v4.1 NEW)"""
-        print("=" * 70)
-        print("📰 STEP 1: 시장 뉴스 수집 및 분석")
-        print("=" * 70)
-        
-        try:
-            news_gen = NewsBriefingGenerator()
-            
-            # 시장 뉴스 브리핑 생성
-            self.news_summary = news_gen.av_collector.get_market_impact_news()
-            self.news_briefing = news_gen._format_briefing(self.news_summary)
-            
-            # 콘솔 출력
-            print(self.news_briefing)
-            print("\n✅ 뉴스 분석 완료!")
-            
-            # 파일 저장
-            news_gen.save_briefing(self.news_briefing, self.date_str)
-            
-        except Exception as e:
-            print(f"⚠️ 뉴스 수집 오류: {e}")
-            self.news_summary = None
-            self.news_briefing = "📰 뉴스 수집 실패"
-    
     def analyze_stock(self, ticker, info) -> Optional[StockAnalysis]:
-        """개별 종목 분석"""
+        """개별 종목 분석 (v4.0과 동일)"""
         try:
-            # 데이터 수집
             df = yf.download(ticker, period="6mo", progress=False)
             if len(df) < 30:
                 return None
             
-            # Handle multi-index columns (newer yfinance)
             if isinstance(df.columns, pd.MultiIndex):
-                # Flatten multi-index columns
                 df.columns = df.columns.get_level_values(0)
             
-            # Ensure columns exist
             required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
             for col in required_cols:
                 if col not in df.columns:
-                    print(f"\n   ⚠️ {ticker}: {col} 컬럼 없음")
                     return None
             
             current_raw = df['Close'].iloc[-1]
             previous_raw = df['Close'].iloc[-2]
-            # Handle both scalar and Series (yfinance returns Series sometimes)
-            if hasattr(current_raw, 'item'):
-                current = float(current_raw.item())
-            else:
-                current = float(current_raw)
-            if hasattr(previous_raw, 'item'):
-                previous = float(previous_raw.item())
-            else:
-                previous = float(previous_raw)
+            current = float(current_raw.item() if hasattr(current_raw, 'item') else current_raw)
+            previous = float(previous_raw.item() if hasattr(previous_raw, 'item') else previous_raw)
             change_pct = ((current - previous) / previous) * 100
             currency = 'KRW' if '.KS' in ticker else 'USD'
             
-            # 기본 지표
+            # RSI
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -577,41 +735,32 @@ class BandiQuantV41:
             rsi_vals = 100 - (100 / (1 + rs_vals))
             rsi_val = float(rsi_vals.iloc[-1]) if not pd.isna(rsi_vals.iloc[-1]) else 50.0
             
+            # Volume
             vol_val = df['Volume'].iloc[-1]
             vol_ma = df['Volume'].rolling(20).mean().iloc[-1]
-            if hasattr(vol_val, 'item'):
-                vol_val = vol_val.item()
-            if hasattr(vol_ma, 'item'):
-                vol_ma = vol_ma.item()
-            if pd.isna(vol_ma) or vol_ma == 0:
-                volume_ratio_val = 1.0
-            else:
-                volume_ratio_val = float(vol_val) / float(vol_ma)
+            vol_val = vol_val.item() if hasattr(vol_val, 'item') else vol_val
+            vol_ma = vol_ma.item() if hasattr(vol_ma, 'item') else vol_ma
+            volume_ratio_val = float(vol_val) / float(vol_ma) if vol_ma and vol_ma != 0 else 1.0
             
             # MACD
             ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
             ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
             macd_line = ema_12 - ema_26
             macd_signal_line = macd_line.ewm(span=9, adjust=False).mean()
-            macd_val = float(macd_line.iloc[-1]) if hasattr(macd_line.iloc[-1], 'item') else macd_line.iloc[-1]
-            macd_sig_val = float(macd_signal_line.iloc[-1]) if hasattr(macd_signal_line.iloc[-1], 'item') else macd_signal_line.iloc[-1]
+            macd_val = float(macd_line.iloc[-1].item() if hasattr(macd_line.iloc[-1], 'item') else macd_line.iloc[-1])
+            macd_sig_val = float(macd_signal_line.iloc[-1].item() if hasattr(macd_signal_line.iloc[-1], 'item') else macd_signal_line.iloc[-1])
             macd_trend = "상승" if macd_val > macd_sig_val else "하락"
             
-            # 볼린저
+            # Bollinger
             bb_mid = df['Close'].rolling(20).mean().iloc[-1]
             bb_std = df['Close'].rolling(20).std().iloc[-1]
-            if hasattr(bb_mid, 'item'):
-                bb_mid = bb_mid.item()
-            if hasattr(bb_std, 'item'):
-                bb_std = bb_std.item()
+            bb_mid = bb_mid.item() if hasattr(bb_mid, 'item') else bb_mid
+            bb_std = bb_std.item() if hasattr(bb_std, 'item') else bb_std
             bb_mid = float(bb_mid)
             bb_std = float(bb_std)
             bb_upper = bb_mid + (bb_std * 2)
             bb_lower = bb_mid - (bb_std * 2)
-            if abs(bb_upper - bb_lower) < 0.0001:
-                bb_pos = 0.5
-            else:
-                bb_pos = (current - bb_lower) / (bb_upper - bb_lower)
+            bb_pos = (current - bb_lower) / (bb_upper - bb_lower) if abs(bb_upper - bb_lower) > 0.0001 else 0.5
             
             if bb_pos > 0.95:
                 bb_position = "상단돌파"
@@ -630,30 +779,16 @@ class BandiQuantV41:
             # 패턴 감지
             patterns = self.pattern_detector.detect_patterns(df)
             
-            # 분석 객체 생성
             analysis = StockAnalysis(
-                ticker=ticker,
-                name=info['name'],
-                sector=info['sector'],
-                desc=info['desc'],
-                current_price=current,
-                previous_price=previous,
-                change_pct=change_pct,
-                currency=currency,
-                rsi=round(rsi_val, 1),
-                macd_trend=macd_trend,
-                bb_position=bb_position,
-                volume_ratio=round(volume_ratio_val, 2),
-                patterns=patterns,
-                ml_prediction=ml_pred,
-                ml_confidence=round(ml_conf, 2),
+                ticker=ticker, name=info['name'], sector=info['sector'], desc=info['desc'],
+                current_price=current, previous_price=previous, change_pct=change_pct,
+                currency=currency, rsi=round(rsi_val, 1), macd_trend=macd_trend,
+                bb_position=bb_position, volume_ratio=round(volume_ratio_val, 2),
+                patterns=patterns, ml_prediction=ml_pred, ml_confidence=round(ml_conf, 2),
                 ml_features=ml_feats
             )
             
-            # 반디 AI 의견
             analysis.bandi_opinion, analysis.bandi_strategy = self.bandi_ai.generate_opinion(analysis)
-            
-            # 등급 판정
             analysis.recommendation = self.determine_grade(analysis)
             
             return analysis
@@ -663,28 +798,25 @@ class BandiQuantV41:
             return None
     
     def determine_grade(self, analysis: StockAnalysis) -> str:
-        """종합 등급 판정"""
+        """등급 판정"""
         score = 0
         
-        # RSI
         if analysis.rsi < 35:
-            score += 3  # 강력매수
+            score += 3
         elif analysis.rsi < 45:
-            score += 2  # 매수권유
+            score += 2
         elif analysis.rsi < 50:
-            score += 1  # 매수대비
+            score += 1
         elif analysis.rsi > 70:
-            score -= 3  # 강력매도
+            score -= 3
         elif analysis.rsi > 60:
-            score -= 1  # 매도대비
+            score -= 1
         
-        # ML 예측
         if analysis.ml_prediction == "상승":
             score += 2 if analysis.ml_confidence > 0.6 else 1
         elif analysis.ml_prediction == "하락":
             score -= 2 if analysis.ml_confidence > 0.6 else 1
         
-        # 패턴
         if analysis.patterns:
             for p in analysis.patterns:
                 if p['signal'] == '매수':
@@ -692,7 +824,6 @@ class BandiQuantV41:
                 elif p['signal'] == '매도':
                     score -= 1
         
-        # 등급 반환
         if score >= 4:
             return "🟢 강력매수"
         elif score >= 2:
@@ -709,84 +840,69 @@ class BandiQuantV41:
             return "⚪ 보유"
     
     def generate_and_send(self):
-        """브리핑 생성 및 전송 - 뉴스 포함 (v4.1)"""
+        """브리핑 생성 및 전송 - v4.1 정세 분석 포함"""
         print("\n📱 텔레그램 브리핑 생성 중...")
         
-        # 메시지 구성
         lines = []
-        # v4.1: 버전 업데이트
         lines.append(f"🤖 반디 퀀트 v4.1 브리핑")
         lines.append(f"📅 {self.date_str}  ⏰ {self.time_str} KST")
         lines.append("")
         
-        # 🗞️ STEP 1: 뉴스 브리핑 (v4.1 NEW - 가장 먼저 표시!)
-        if self.news_summary:
-            lines.append("=" * 50)
-            lines.append("🗞️ 오늘의 시장 뉴스 (필수 체크)")
-            lines.append("=" * 50)
+        # 🆕 시장 정세 요약
+        if self.market_news:
+            lines.append("═" * 40)
+            lines.append("🌍 시장 정세 분석")
+            lines.append("═" * 40)
             
-            # 지정학적 리스크
-            risk_emoji = {"정상": "🟢", "주의": "🟡", "위험": "🟠", "심각": "🔴"}
-            geo_emoji = risk_emoji.get(self.news_summary.geopolitical_risk, "⚪")
-            lines.append(f"\n{geo_emoji} 지정학적 리스크: {self.news_summary.geopolitical_risk}")
+            mkt_overview = self.market_intel.get_market_overview()
+            lines.append(f"📊 {mkt_overview}")
+            lines.append(f"🌡️ VIX 공포지수: {self.market_news.vix_level:.1f} {self.market_news.sentiment}")
+            lines.append(f"🛢️ WTI 유가: ${self.market_news.oil_price:.2f}")
+            lines.append("")
+            lines.append(f"🔥 지정학적 리스크: {self.market_news.geopolitical_risk}")
+            lines.append(f"🏛️ Fed 정책: {self.market_news.fed_policy}")
             
-            # 시장 영향
-            impact_emoji = {"강세": "🟢", "약강세": "🟡", "중립": "⚪", "약약세": "🟠", "약세": "🔴"}
-            imp_emoji = impact_emoji.get(self.news_summary.market_impact, "⚪")
-            lines.append(f"{imp_emoji} 시장 영향 판정: {self.news_summary.market_impact}")
-            lines.append(f"   (영향 점수: {self.news_summary.impact_score:+.1f}/10)")
-            
-            # 감성 분포
-            lines.append(f"\n💭 뉴스 감성:")
-            total = self.news_summary.total_news_count
-            if total > 0:
-                bull_pct = (self.news_summary.bullish_count / total) * 100
-                bear_pct = (self.news_summary.bearish_count / total) * 100
-                neut_pct = (self.news_summary.neutral_count / total) * 100
-                lines.append(f"   🟢 긍정: {self.news_summary.bullish_count}개 ({bull_pct:.0f}%)")
-                lines.append(f"   🔴 부정: {self.news_summary.bearish_count}개 ({bear_pct:.0f}%)")
-                lines.append(f"   ⚪ 중립: {self.news_summary.neutral_count}개 ({neut_pct:.0f}%)")
-            
-            # 리스크 요인
-            if self.news_summary.risk_factors:
-                lines.append(f"\n⚠️ 주요 리스크 요인:")
-                for i, factor in enumerate(self.news_summary.risk_factors[:3], 1):
-                    lines.append(f"   {i}. {factor[:45]}...")
-            
-            # 핵심 뉴스 헤드라인
-            if self.news_summary.top_news:
-                lines.append(f"\n📌 핵심 뉴스:")
-                for i, news in enumerate(self.news_summary.top_news[:3], 1):
-                    sent_emoji = "🔴" if news.sentiment_score < 0 else "🟢" if news.sentiment_score > 0 else "⚪"
-                    lines.append(f"   {i}. {sent_emoji} {news.title[:40]}...")
+            if self.market_news.major_events:
+                lines.append("")
+                lines.append("📰 주요 이벤트:")
+                for event in self.market_news.major_events[:3]:
+                    lines.append(f"   {event}")
             
             lines.append("")
-            lines.append("=" * 50)
-        elif self.news_briefing and "실패" not in self.news_briefing:
-            lines.append("🗞️ 뉴스 브리핑:")
-            lines.append(self.news_briefing)
-        else:
-            lines.append("📰 오늘의 뉴스: 수집 중...")
         
-        lines.append("")
+        # 종합 시장 의견
+        avg_rsi = sum(s.rsi for s in self.results) / len(self.results) if self.results else 50
+        ml_up = sum(1 for s in self.results if s.ml_prediction == "상승")
+        ml_down = sum(1 for s in self.results if s.ml_prediction == "하락")
         
-        # 시장 요약
+        if self.market_news:
+            market_opinion, market_strategy = self.market_intel.generate_market_opinion(
+                self.market_news, avg_rsi, ml_up, ml_down
+            )
+            
+            lines.append("═" * 40)
+            lines.append("🎯 반디 종합 시장 의견")
+            lines.append("═" * 40)
+            lines.append(f"종합 판단: {market_opinion}")
+            lines.append(f"전략: {market_strategy}")
+            lines.append("")
+        
+        # 기존 내용
+        lines.append("═" * 40)
         lines.append("📊 시장 요약")
-        avg_rsi = sum(s.rsi for s in self.results) / len(self.results)
+        lines.append("═" * 40)
         up_count = sum(1 for s in self.results if s.change_pct > 0)
         down_count = len(self.results) - up_count
         lines.append(f"- 분석: {len(self.results)}개 종목")
         lines.append(f"- 상승: {up_count}개 | 하락: {down_count}개")
         lines.append(f"- 평균 RSI: {avg_rsi:.1f}")
-        
-        # ML 예측 요약
-        ml_up = sum(1 for s in self.results if s.ml_prediction == "상승")
-        ml_down = sum(1 for s in self.results if s.ml_prediction == "하락")
         lines.append(f"- ML 예측: 상승 {ml_up}개 | 하락 {ml_down}개")
         lines.append("")
         
-        # 급등 TOP 3
+        # 급등 TOP 5
+        lines.append("═" * 40)
         lines.append("🔥 오늘의 급등 TOP 5")
+        lines.append("═" * 40)
         surging = sorted(self.results, key=lambda x: x.change_pct, reverse=True)[:5]
         for i, s in enumerate(surging, 1):
             unit = "원" if s.currency == 'KRW' else "$"
@@ -801,7 +917,9 @@ class BandiQuantV41:
         strong_signals.sort(key=lambda x: x.ml_confidence, reverse=True)
         
         if strong_signals:
+            lines.append("═" * 40)
             lines.append("🎯 AI 강력 추천 (ML 신뢰도 60%+)")
+            lines.append("═" * 40)
             for s in strong_signals[:5]:
                 unit = "원" if s.currency == 'KRW' else "$"
                 price_str = f"{int(s.current_price):,}{unit}" if s.currency == 'KRW' else f"{s.current_price:.2f}{unit}"
@@ -825,47 +943,43 @@ class BandiQuantV41:
         # 매도 권고
         sells = [s for s in self.results if '매도' in s.recommendation]
         if sells:
+            lines.append("═" * 40)
             lines.append("🔴 매도 주의 종목")
+            lines.append("═" * 40)
             for s in sells[:5]:
                 lines.append(f"• {s.name}: {s.recommendation}")
         
         lines.append("")
-        lines.append("------------------------------")
+        lines.append("═" * 40)
         lines.append(f"📎 상세: /analysis/briefing_{self.date_str}.json")
-        # v4.1: 뉴스 수집 포함 표시
-        news_status = "✅"
-        lines.append(f"🤖 반디 AI v4.1 | 43종목 + 뉴스 분석 {news_status}")
+        lines.append("🤖 반디 AI v4.1 | 뉴스 + 정세 + 43종목 분석")
         lines.append("")
         lines.append("반디가 파파를 응원해요 🐾")
         
-        # 전송
         message = "\n".join(lines)
         
-        # 📊 차트 생성 및 전송
+        # 차트 생성 및 전송
         if CHART_AVAILABLE:
             chart_paths = self.generate_charts(self.results, max_charts=5)
             self.send_telegram_with_charts(message, chart_paths)
         else:
             self.send_telegram(message)
         
-        # 결과 저장
         self.save_results()
     
     def generate_charts(self, stocks: List[StockAnalysis], max_charts: int = 5):
         """상위 종목 차트 생성"""
         if not CHART_AVAILABLE:
-            print("⚠️ 차트 모듈 없이 스킵")
+            print("⚠️ 차트 모듈 없음")
             return []
         
         print(f"\n📊 차트 생성 중... (최대 {max_charts}개)")
         chart_paths = []
         
-        # 신뢰도 높은 순으로 정렬
         sorted_stocks = sorted(stocks, key=lambda x: x.ml_confidence, reverse=True)
         
         for i, s in enumerate(sorted_stocks[:max_charts]):
             try:
-                # 신호 타입 결정
                 if s.ml_prediction == "상승":
                     signal_type = 'buy'
                     signal_strength = 'strong' if s.ml_confidence > 0.7 else 'normal'
@@ -876,20 +990,12 @@ class BandiQuantV41:
                     signal_type = None
                     signal_strength = None
                 
-                # 차트 파일명: 종목 이름으로 생성 (특수문자 제거)
-                safe_name = s.name.replace(' ', '_').replace('&', 'and')
-                # 한글/영문/숫자/_ 만 허용
-                import re
-                safe_name = re.sub(r'[^\w]', '', safe_name)
+                safe_name = re.sub(r'[^\w]', '', s.name.replace(' ', '_').replace('&', 'and'))
                 chart_path = f"{CHART_DIR}/{safe_name}_{self.date_str}.png"
                 
-                # 차트 생성
                 result = create_stock_chart(
-                    ticker=s.ticker,
-                    name=s.name,
-                    output_path=chart_path,
-                    signal_type=signal_type,
-                    signal_strength=signal_strength
+                    ticker=s.ticker, name=s.name, output_path=chart_path,
+                    signal_type=signal_type, signal_strength=signal_strength
                 )
                 
                 if result.get('success'):
@@ -907,7 +1013,6 @@ class BandiQuantV41:
     
     def send_telegram_with_charts(self, message: str, chart_paths: List[str]):
         """텍스트 + 차트 전송"""
-        # 1. 텍스트 먼저 전송
         url_msg = f"{TELEGRAM_API}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message}
         
@@ -920,7 +1025,6 @@ class BandiQuantV41:
         except Exception as e:
             print(f"❌ 텍스트 오류: {e}")
         
-        # 2. 차트 이미지 전송
         if chart_paths:
             print(f"\n📸 차트 이미지 {len(chart_paths)}개 전송 중...")
             url_photo = f"{TELEGRAM_API}/sendPhoto"
@@ -931,12 +1035,9 @@ class BandiQuantV41:
                         with open(chart_path, 'rb') as f:
                             files = {'photo': f}
                             data = {'chat_id': CHAT_ID}
-                            
-                            # 파일명에서 종목명 추출 (이름_날짜.png 형식)
                             filename = os.path.basename(chart_path)
                             stock_name = filename.replace(f'_{self.date_str}.png', '')
-                            caption = f"📊 {stock_name} 분석 차트"
-                            data['caption'] = caption
+                            data['caption'] = f"📊 {stock_name} 분석 차트"
                             
                             response = requests.post(url_photo, data=data, files=files, timeout=30)
                             if response.status_code == 200:
@@ -950,7 +1051,7 @@ class BandiQuantV41:
                     print(f"   ❌ 차트 전송 오류: {str(e)[:50]}")
     
     def send_telegram(self, message: str):
-        """텔레그램 전송 (기본 텍스트만)"""
+        """텔레그램 전송"""
         url = f"{TELEGRAM_API}/sendMessage"
         payload = {"chat_id": CHAT_ID, "text": message}
         try:
@@ -963,48 +1064,30 @@ class BandiQuantV41:
             print(f"❌ 오류: {e}")
     
     def save_results(self):
-        """결과 저장 - 뉴스 포함 (v4.1)"""
+        """결과 저장"""
         output_dir = os.path.join(WORKSPACE_DIR, "analysis")
         os.makedirs(output_dir, exist_ok=True)
         filename = f"{output_dir}/briefing_v41_{self.date_str}.json"
-        
-        # 뉴스 요약 데이터 준비
-        news_data = None
-        if self.news_summary:
-            news_data = {
-                "total_news": self.news_summary.total_news_count,
-                "sentiment_distribution": {
-                    "bullish": self.news_summary.bullish_count,
-                    "bearish": self.news_summary.bearish_count,
-                    "neutral": self.news_summary.neutral_count
-                },
-                "avg_sentiment": round(self.news_summary.avg_sentiment, 3),
-                "market_impact": self.news_summary.market_impact,
-                "impact_score": round(self.news_summary.impact_score, 2),
-                "geopolitical_risk": self.news_summary.geopolitical_risk,
-                "risk_factors": self.news_summary.risk_factors
-            }
         
         data = {
             "version": "4.1",
             "date": self.date_str,
             "time": self.time_str,
+            "market_news": {
+                "vix": self.market_news.vix_level if self.market_news else None,
+                "oil_price": self.market_news.oil_price if self.market_news else None,
+                "geopolitical_risk": self.market_news.geopolitical_risk if self.market_news else None,
+                "fed_policy": self.market_news.fed_policy if self.market_news else None,
+                "major_events": self.market_news.major_events if self.market_news else []
+            },
             "total_stocks": len(self.results),
-            "news_collected": self.news_summary is not None,
-            "news_summary": news_data,
             "stocks": [
                 {
-                    "ticker": s.ticker,
-                    "name": s.name,
-                    "sector": s.sector,
-                    "current_price": s.current_price,
-                    "change_pct": s.change_pct,
-                    "rsi": s.rsi,
-                    "ml_prediction": s.ml_prediction,
-                    "ml_confidence": s.ml_confidence,
-                    "patterns": s.patterns,
-                    "recommendation": s.recommendation,
-                    "bandi_opinion": s.bandi_opinion
+                    "ticker": s.ticker, "name": s.name,
+                    "current_price": s.current_price, "change_pct": s.change_pct,
+                    "rsi": s.rsi, "ml_prediction": s.ml_prediction,
+                    "ml_confidence": s.ml_confidence, "patterns": s.patterns,
+                    "recommendation": s.recommendation, "bandi_opinion": s.bandi_opinion
                 } for s in self.results
             ]
         }
@@ -1015,15 +1098,6 @@ class BandiQuantV41:
         print(f"💾 결과 저장: {filename}")
 
 
-def main_v41():
-    """v4.1 메인 실행 함수"""
-    print("=" * 70)
-    print("🚀 반디 퀀트 v4.1 시작 (뉴스 수집 통합)")
-    print("=" * 70)
-    
+if __name__ == "__main__":
     system = BandiQuantV41()
     system.run()
-
-
-if __name__ == "__main__":
-    main_v41()
