@@ -22,7 +22,7 @@ jobs:
       run: |
         mkdir -p trained_models
         # Get the latest successful training run
-        RUN_ID=$(gh run list --workflow="Train RL Trader All Stocks" --status=success --limit=1 --json databaseId -q '.[0].databaseId')
+        RUN_ID=$(gh run list --workflow="RL Trader Training" --status=success --limit=1 --json databaseId -q '.[0].databaseId')
         echo "Using run ID: $RUN_ID"
         
         # Download models from each successful group
