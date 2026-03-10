@@ -1,0 +1,321 @@
+name: RL Training v3.0 - Dual API Parallel 🚀
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: "1"
+  RL_AGGRESSIVE: "true"
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # Job 1: 한국 주식 (한투 API) - Rate Limit 없음
+  # ═══════════════════════════════════════════════════════════
+  train-korea:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    
+    env:
+      DATA_SOURCE: "KIS"
+      STOCKS: "000660.KS,005930.KS,042700.KS,001740.KS,068270.KS,207940.KS,196170.KS,136480.KS,005380.KS,000270.KS,012330.KS,373220.KS,006400.KS,005490.KS,247540.KS"
+      DELAY_BETWEEN_STOCKS: "0.5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train Korea Stocks (KIS API)
+      run: |
+        python3 train_dual_api.py --source KIS --stocks "$STOCKS"
+      env:
+        KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+        KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+        KIS_ACCOUNT_NO: ${{ secrets.KIS_ACCOUNT_NO }}
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-korea
+        path: rl_models_v3/bandi_rl_KIS_*.zip
+        retention-days: 30
+    
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-results-korea
+        path: training_results_KIS.json
+        retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 2: 미국 반도체 (Yahoo + 지연)
+  # ═══════════════════════════════════════════════════════════
+  train-us-semiconductor:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    
+    env:
+      DATA_SOURCE: "YAHOO"
+      STOCKS: "NVDA,AMD,ARM"
+      RATE_LIMIT_DELAY: "3"
+      DELAY_BETWEEN_STOCKS: "5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train US Semiconductor (Yahoo)
+      run: |
+        python3 train_dual_api.py --source YAHOO --stocks "$STOCKS"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-us-semi
+        path: rl_models_v3/bandi_rl_YAHOO_*.zip
+        retention-days: 30
+    
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-results-us-semi
+        path: training_results_YAHOO.json
+        retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 3: 미국 기술/자동차 (Yahoo + 지연)
+  # ═══════════════════════════════════════════════════════════
+  train-us-tech-auto:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    
+    env:
+      DATA_SOURCE: "YAHOO"
+      STOCKS: "TSLA,F,GM,RIVN,PLTR,AI,SNOW,CRWD,ONON"
+      RATE_LIMIT_DELAY: "3"
+      DELAY_BETWEEN_STOCKS: "5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train US Tech/Auto (Yahoo)
+      run: |
+        python3 train_dual_api.py --source YAHOO --stocks "$STOCKS"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-us-tech
+        path: rl_models_v3/bandi_rl_YAHOO_*.zip
+        retention-days: 30
+    
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-results-us-tech
+        path: training_results_YAHOO.json
+        retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 4: 미국 기타 (에너지, 배터리 소재) (Yahoo + 지연)
+  # ═══════════════════════════════════════════════════════════
+  train-us-others:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    
+    env:
+      DATA_SOURCE: "YAHOO"
+      STOCKS: "NEE,ENPH,SEDG,FSLR,RUN,BE,ALB,QS,JNJ"
+      RATE_LIMIT_DELAY: "3"
+      DELAY_BETWEEN_STOCKS: "5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train US Others (Yahoo)
+      run: |
+        python3 train_dual_api.py --source YAHOO --stocks "$STOCKS"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-us-others
+        path: rl_models_v3/bandi_rl_YAHOO_*.zip
+        retention-days: 30
+    
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-results-us-others
+        path: training_results_YAHOO.json
+        retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 5: 결과 병합 및 최종 보고서
+  # ═══════════════════════════════════════════════════════════
+  merge-results:
+    runs-on: ubuntu-latest
+    needs: [train-korea, train-us-semiconductor, train-us-tech-auto, train-us-others]
+    if: always()
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        pattern: rl-v3-*
+    
+    - name: Merge training results
+      run: |
+        python3 << 'EOF'
+        import json
+        import os
+        from pathlib import Path
+
+        all_results = {
+          "timestamp": "${{ github.event.repository.updated_at }}",
+          "run_id": "${{ github.run_id }}",
+          "jobs": {}
+        }
+
+        # 결과 파일들 병합
+        for result_file in Path("artifacts").rglob("training_results_*.json"):
+            try:
+                with open(result_file) as f:
+                    data = json.load(f)
+                    source = data.get('source', 'unknown')
+                    all_results['jobs'][source] = data
+            except Exception as e:
+                print(f"Error reading {result_file}: {e}")
+
+        # 저장
+        with open("training_results_merged.json", "w") as f:
+            json.dump(all_results, f, indent=2, ensure_ascii=False)
+
+        # 요약 출력
+        total_stocks = 0
+        success_stocks = 0
+        for source, data in all_results['jobs'].items():
+            results = data.get('results', [])
+            success = sum(1 for r in results if r.get('success'))
+            total = len(results)
+            total_stocks += total
+            success_stocks += success
+            print(f"{source}: {success}/{total} 성공")
+
+        print(f"\n{'='*50}")
+        print(f"총 학습: {success_stocks}/{total_stocks} 종목")
+        print(f"성공률: {success_stocks/total_stocks*100:.1f}%" if total_stocks > 0 else "N/A")
+        print(f"{'='*50}")
+        EOF
+    
+    - name: Upload merged results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-final-report
+        path: training_results_merged.json
+        retention-days: 30
+    
+    - name: Summary
+      run: |
+        echo "═══════════════════════════════════════════"
+        echo "  🚀 RL Training v3.0 Dual API 완료!"
+        echo "═══════════════════════════════════════════"
+        echo ""
+        echo "Jobs:"
+        echo "  - 🇰🇷 Korea (KIS API)"
+        echo "  - 🇺🇸 US Semiconductor (Yahoo)"
+        echo "  - 🇺🇸 US Tech/Auto (Yahoo)"
+        echo "  - 🇺🇸 US Others (Yahoo)"
+        echo ""
+        echo "Artifacts:"
+        echo "  - rl-v3-models-*"
+        echo "  - rl-v3-final-report"
+        echo "═══════════════════════════════════════════"
