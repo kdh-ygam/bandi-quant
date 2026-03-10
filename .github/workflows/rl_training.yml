@@ -1,0 +1,183 @@
+name: RL Trader Training
+
+on:
+  # 수동 실행
+  workflow_dispatch:
+    inputs:
+      stock:
+        description: '학습할 종목 (비워두면 전체 43종목)'
+        required: false
+        default: ''
+      timesteps:
+        description: '학습 스텝 수'
+        required: false
+        default: '50000'
+  
+  # 주간 실행 (일요일 새벽)
+  schedule:
+    - cron: '0 2 * * 0'
+
+jobs:
+  rl-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 600  # 10시간
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models
+    
+    - name: Train single stock (if specified)
+      if: github.event.inputs.stock != ''
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        python3 -c "
+        from bandi_rl_trader import BandiRLTrader
+        trader = BandiRLTrader()
+        model = trader.train('${{ github.event.inputs.stock }}', 
+                            total_timesteps=${{ github.event.inputs.timesteps }})
+        print(f'✅ ${{ github.event.inputs.stock }} 학습 완료!')
+        "
+    
+    - name: Train all stocks
+      if: github.event.inputs.stock == ''
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+      run: |
+        python3 -c "
+        from bandi_rl_trader import BandiRLTrader, STOCKS
+        import time
+        
+        trader = BandiRLTrader()
+        results = {}
+        
+        print('='*60)
+        print('🚀 반디 RL 트레이더 - GitHub Actions 학습')
+        print('='*60)
+        print(f'총 종목: {len(STOCKS)}개')
+        print()
+        
+        for i, (ticker, info) in enumerate(STOCKS.items(), 1):
+            print(f'\n[{i}/{len(STOCKS)}] {info[\"name\"]} ({ticker}) 학습 중...')
+            try:
+                model = trader.train(ticker, total_timesteps=50000)
+                results[ticker] = {'status': 'success', 'name': info['name']}
+                print(f'✅ {ticker} 완료!')
+            except Exception as e:
+                results[ticker] = {'status': 'failed', 'error': str(e)}
+                print(f'❌ {ticker} 실패: {e}')
+            
+            # GitHub Actions 타임아웃 방지
+            if i % 5 == 0:
+                print(f'\n⏸️  중간 저장...')
+                time.sleep(10)
+        
+        print('\n' + '='*60)
+        success = sum(1 for r in results.values() if r['status'] == 'success')
+        print(f'✅ 완료! {success}/{len(STOCKS)} 종목 학습 성공')
+        print('='*60)
+        "
+    
+    - name: Upload trained models
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: rl-trained-models
+        path: rl_models/
+        retention-days: 30
+    
+    - name: Upload training logs
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: training-logs
+        path: |
+          training_progress.json
+          training_results.json
+        retention-days: 30
+
+  # 개별 종목 병렬 학습 (선택적)
+  rl-training-parallel:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.stock == ''
+    strategy:
+      matrix:
+        stock_group: [semiconductor, bio, auto, battery, energy, ai]
+      fail-fast: false
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+    
+    - name: Train stock group
+      env:
+        PYTHONPATH: ${{ github.workspace }}
+        STOCK_GROUP: ${{ matrix.stock_group }}
+      run: |
+        python3 -c "
+        from bandi_rl_trader import BandiRLTrader, STOCKS
+        
+        # 그룹별 종목 분류
+        groups = {
+            'semiconductor': ['NVDA', 'AMD', 'ARM', '000660.KS', '005930.KS', '042700.KS', '001740.KS'],
+            'bio': ['068270.KS', '207940.KS', '196170.KS', '136480.KS', 'JNJ'],
+            'auto': ['TSLA', '005380.KS', '000270.KS', '012330.KS', '003620.KS', 'F', 'GM', 'RIVN'],
+            'battery': ['373220.KS', '006400.KS', '005490.KS', '247540.KS', 'ALB', 'QS'],
+            'energy': ['NEE', 'ENPH', 'SEDG', 'FSLR', 'RUN', 'BE'],
+            'ai': ['PLTR', 'AI', 'SNOW', 'CRWD', 'ONON']
+        }
+        
+        tickers = groups.get('${{ matrix.stock_group }}', [])
+        trader = BandiRLTrader()
+        
+        print(f'🚀 {\"${{ matrix.stock_group }}\"} 그룹 학습 ({len(tickers)}종목)')
+        
+        for ticker in tickers:
+            if ticker in STOCKS:
+                print(f'  📈 {STOCKS[ticker][\"name\"]} ({ticker})')
+                try:
+                    trader.train(ticker, total_timesteps=50000)
+                    print(f'  ✅ 완료')
+                except Exception as e:
+                    print(f'  ❌ 실패: {e}')
+        
+        print(f'✅ 그룹 학습 완료!')
+        "
+    
+    - name: Upload group models
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: rl-models-${{ matrix.stock_group }}
+        path: rl_models/
+        retention-days: 30
