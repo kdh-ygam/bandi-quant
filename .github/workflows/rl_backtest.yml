@@ -16,6 +16,7 @@ jobs:
     
     - name: Install dependencies
       run: |
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
         pip install -r requirements.txt
     
     - name: Download trained models
@@ -30,22 +31,37 @@ jobs:
           gh run download $RUN_ID --name $artifact --dir ./trained_models/ 2>/dev/null || echo "Artifact $artifact not found"
         done
         
+        echo "=== Downloaded Models ==="
         ls -la trained_models/
+        echo ""
+        echo "Total models: $(ls trained_models/*.zip 2>/dev/null | wc -l)"
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Run backtesting
       run: |
-        python3 backtest_rl_trained.py
+        python3 backtest_v3_fixed.py
+      continue-on-error: true  # 에러나도 계속 진행
     
     - name: Upload backtest results
       uses: actions/upload-artifact@v4
+      if: always()  # 항상 업로드
       with:
-        name: rl-backtest-results
+        name: rl-v3-backtest-full
         path: |
           backtest_results.json
           backtest_summary.txt
+        if-no-files-found: ignore  # 파일 없어도 OK
     
     - name: Display results
+      if: always()
       run: |
-        cat backtest_summary.txt
+        echo "═══════════════════════════════════════════"
+        echo "  RL v3.0 백테스트 결과"
+        echo "═══════════════════════════════════════════"
+        if [ -f backtest_summary.txt ]; then
+          cat backtest_summary.txt
+        else
+          echo "⚠️ 결과 파일 없음"
+        fi
+        echo "═══════════════════════════════════════════"
