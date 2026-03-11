@@ -13,7 +13,7 @@ import sys
 import json
 import time
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, List
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -53,7 +53,7 @@ class KISAPI:
             data = resp.json()
             self.access_token = data.get('access_token')
             expires_in = data.get('expires_in', 86400)
-            self.token_expired = datetime.now() + __import__('datetime').timedelta(seconds=int(expires_in) - 60)
+            self.token_expired = datetime.now() + timedelta(seconds=int(expires_in) - 60)
             print(f"✅ KIS API 토큰 발급 완료")
             return True
         except Exception as e:
@@ -71,7 +71,7 @@ class KISAPI:
         
         period_days = {'1d': 1, '1m': 30, '3m': 90, '6m': 180, '1y': 365, '2y': 730}.get(period, 730)
         end_date = datetime.now()
-        start_date = end_date - __import__('datetime').timedelta(days=period_days)
+        start_date = end_date - timedelta(days=period_days)
         
         url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
         params = {

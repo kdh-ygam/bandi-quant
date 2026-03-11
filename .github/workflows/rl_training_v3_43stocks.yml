@@ -1,0 +1,274 @@
+name: RL Training v3.2 - Full 43 Stocks 🚀
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: "1"
+  RL_AGGRESSIVE: "true"
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # Job 1: 한국 주식 - 21종목 (한투 API)
+  # ═══════════════════════════════════════════════════════════
+  train-korea:
+    runs-on: ubuntu-latest
+    
+    env:
+      DATA_SOURCE: "KIS"
+      # 21 Korean stocks (원래 15개 + 추가 6개)
+      STOCKS: "000660.KS,005930.KS,042700.KS,001740.KS,068270.KS,207940.KS,196170.KS,136480.KS,005380.KS,000270.KS,012330.KS,373220.KS,006400.KS,005490.KS,247540.KS,010120.KS,267260.KS,051600.KS,052690.KS,003670.KS,003620.KS"
+      DELAY_BETWEEN_STOCKS: "1"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train Korea Stocks (21종목, KIS 내장API)
+      run: |
+        python3 train_dual_api.py --source KIS --stocks "$STOCKS"
+      env:
+        KIS_APP_KEY: ${{ secrets.KIS_APP_KEY }}
+        KIS_APP_SECRET: ${{ secrets.KIS_APP_SECRET }}
+        KIS_ACCOUNT_NO: ${{ secrets.KIS_ACCOUNT_NO }}
+    
+    - name: Upload results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-results-korea
+        path: training_results_KIS.json
+        retention-days: 30
+        if-no-files-found: warn
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 2: 미국 반도체 - 3종목 (Yahoo)
+  # ═══════════════════════════════════════════════════════════
+  train-us-semiconductor:
+    runs-on: ubuntu-latest
+    
+    env:
+      DATA_SOURCE: "YAHOO"
+      STOCKS: "NVDA,AMD,ARM"
+      RATE_LIMIT_DELAY: "3"
+      DELAY_BETWEEN_STOCKS: "5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train US Semiconductor
+      run: |
+        python3 train_dual_api.py --source YAHOO --stocks "$STOCKS"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-us-semi
+        path: rl_models_v3/bandi_rl_YAHOO_*.zip
+        retention-days: 30
+
+  # ═══════════════════════════════════════════════════════════
+  # Job 3: 미국 기술/자동차 - 9종목 (Yahoo)
+  # ═══════════════════════════════════════════════════════════
+  train-us-tech-auto:
+    runs-on: ubuntu-latest
+    
+    env:
+      DATA_SOURCE: "YAHOO"
+      STOCKS: "TSLA,F,GM,RIVN,PLTR,AI,SNOW,CRWD,ONON"
+      RATE_LIMIT_DELAY: "3"
+      DELAY_BETWEEN_STOCKS: "5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train US Tech/Auto
+      run: |
+        python3 train_dual_api.py --source YAHOO --stocks "$STOCKS"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-us-tech
+        path: rl_models_v3/bandi_rl_YAHOO_*.zip
+        retention-days: 30
+  
+  # ═══════════════════════════════════════════════════════════
+  # Job 4: 미국 에너지/배터리 - 10종목 (Yahoo)
+  # ═══════════════════════════════════════════════════════════
+  # 원래 9개 + 추가 1개
+  train-us-energy-battery:
+    runs-on: ubuntu-latest
+    
+    env:
+      DATA_SOURCE: "YAHOO"
+      # 추가: JNJ, ENPH 포함
+      STOCKS: "NEE,ENPH,SEDG,FSLR,RUN,BE,ALB,QS,JNJ,ENPH"
+      RATE_LIMIT_DELAY: "3"
+      DELAY_BETWEEN_STOCKS: "5"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+        restore-keys: ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Create model directory
+      run: mkdir -p rl_models_v3
+    
+    - name: Train US Energy/Battery
+      run: |
+        python3 train_dual_api.py --source YAHOO --stocks "$STOCKS"
+    
+    - name: Upload models
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-models-us-energy
+        path: rl_models_v3/bandi_rl_YAHOO_*.zip
+        retention-days: 30
+  
+  # ═══════════════════════════════════════════════════════════
+  # Job 5: 결과 병합
+  # ═══════════════════════════════════════════════════════════
+  merge-results:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [train-korea, train-us-semiconductor, train-us-tech-auto, train-us-energy-battery]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+        pattern: rl-v3-*
+    
+    - name: Merge results
+      run: |
+        python3 << 'EOF'
+        import json
+        from pathlib import Path
+
+        total = {'success': 0, 'total': 0, 'jobs': {}}
+        
+        for f in Path("artifacts").rglob("training_results_*.json"):
+            try:
+                with open(f) as fp:
+                    data = json.load(fp)
+                src = data.get('source', 'unknown')
+                results = data.get('results', [])
+                succ = sum(1 for r in results if r.get('success'))
+                total['jobs'][src] = {'success': succ, 'total': len(results)}
+                total['success'] += succ
+                total['total'] += len(results)
+                print(f"{src}: {succ}/{len(results)}")
+            except Exception as e:
+                print(f"Error: {e}")
+        
+        rate = total['success']/total['total']*100 if total['total'] > 0 else 0
+        print(f"\n{'='*40}")
+        print(f"🎯 총: {total['success']}/{total['total']} ({rate:.1f}%)")
+        print(f"{'='*40}")
+        
+        with open("training_results_merged.json", "w") as f:
+            json.dump(total, f, indent=2)
+        EOF
+    
+    - name: Upload merged
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-final-report-43
+        path: training_results_merged.json
+        retention-days: 30
+    
+    - name: Summary
+      run: |
+        echo "═══════════════════════════════════════"
+        echo "  🚀 RL Training v3.2 - 43종목 완료!"
+        echo "═══════════════════════════════════════"
+        echo ""
+        echo "Jobs:"
+        echo "  - 🇰🇷 Korea: 21종목"
+        echo "  - 🇺🇸 Semiconductor: 3종목"
+        echo "  - 🇺🇸 Tech/Auto: 9종목"
+        echo "  - 🇺🇸 Energy/Battery: 10종목"
+        echo ""
+        echo "총: 43종목"
+        echo "═══════════════════════════════════════"
