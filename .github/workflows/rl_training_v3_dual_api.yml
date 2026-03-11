@@ -9,7 +9,7 @@ env:
 
 jobs:
   # ═══════════════════════════════════════════════════════════
-  # Job 1: 한국 주식 (한투 API) - Rate Limit 없음
+  # Job 1: 한국 주식 21종목 (한투 API) - Rate Limit 없음
   # ═══════════════════════════════════════════════════════════
   train-korea:
     runs-on: ubuntu-latest
@@ -18,8 +18,8 @@ jobs:
     
     env:
       DATA_SOURCE: "KIS"
-      STOCKS: "000660.KS,005930.KS,042700.KS,001740.KS,068270.KS,207940.KS,196170.KS,136480.KS,005380.KS,000270.KS,012330.KS,373220.KS,006400.KS,005490.KS,247540.KS"
-      DELAY_BETWEEN_STOCKS: "0.5"
+      STOCKS: "000660.KS,005930.KS,042700.KS,001740.KS,068270.KS,207940.KS,196170.KS,136480.KS,005380.KS,000270.KS,012330.KS,373220.KS,006400.KS,005490.KS,247540.KS,010120.KS,267260.KS,051600.KS,052690.KS,003670.KS,003620.KS"
+      DELAY_BETWEEN_STOCKS: "1"
     
     steps:
     - uses: actions/checkout@v4
