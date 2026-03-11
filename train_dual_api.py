@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 ╔══════════════════════════════════════════════════════════════════════╗
-║           반디 듀얼 API 학습 스크립트 v3.0 🚀                        ║
+║           반디 듀얼 API 학습 스크립트 v3.1 🚀                        ║
 ║                                                                      ║
-║  • 한투 API: 국내 주식 (Rate Limit 없음)                            ║
+║  • 한투 API: 국내 주식 (Rate Limit 없음) - 내장모듈                 ║
 ║  • Yahoo Finance: 해외 주식 (Rate Limit 대비 지연)                   ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
@@ -14,15 +14,123 @@ import json
 import time
 import argparse
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, List
 
-# 한투 API 임포트 시도
-try:
-    from kis_api import KISAPI
-    KIS_AVAILABLE = True
-except ImportError:
-    KIS_AVAILABLE = False
-    print("⚠️ KIS API 모듈 미설치")
+# ═══════════════════════════════════════════════════════════════════════
+# 한투 API 모듈 (내장)
+# ═══════════════════════════════════════════════════════════════════════
+import requests
+import pandas as pd
+
+class KISAPI:
+    """한국투자증권 API 클래스 (내장)"""
+    
+    BASE_URL = "https://openapi.koreainvestment.com:9443"
+    BASE_URL_TEST = "https://openapivts.koreainvestment.com:29443"
+    
+    def __init__(self, app_key: str = None, app_secret: str = None, account_no: str = None, test_mode: bool = True):
+        self.app_key = app_key or os.getenv('KIS_APP_KEY')
+        self.app_secret = app_secret or os.getenv('KIS_APP_SECRET')
+        self.account_no = account_no or os.getenv('KIS_ACCOUNT_NO')
+        self.test_mode = test_mode
+        self.base_url = self.BASE_URL_TEST if test_mode else self.BASE_URL
+        self.access_token = None
+        self.token_expired = None
+        self._get_access_token()
+    
+    def _get_access_token(self) -> bool:
+        """접근 토큰 발급"""
+        url = f"{self.base_url}/oauth2/tokenP"
+        headers = {"content-type": "application/json"}
+        body = {
+            "grant_type": "client_credentials",
+            "appkey": self.app_key,
+            "appsecret": self.app_secret
+        }
+        try:
+            resp = requests.post(url, headers=headers, json=body, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            self.access_token = data.get('access_token')
+            expires_in = data.get('expires_in', 86400)
+            self.token_expired = datetime.now() + __import__('datetime').timedelta(seconds=int(expires_in) - 60)
+            print(f"✅ KIS API 토큰 발급 완료")
+            return True
+        except Exception as e:
+            print(f"❌ KIS API 토큰 발급 실패: {e}")
+            return False
+    
+    def _ensure_token(self):
+        if self.access_token is None or datetime.now() >= self.token_expired:
+            self._get_access_token()
+    
+    def get_stock_data(self, ticker: str, period: str = "2y") -> Optional[pd.DataFrame]:
+        """주식 일별 시세 조회"""
+        self._ensure_token()
+        ticker = ticker.replace('.KS', '').replace('.KQ', '')
+        
+        period_days = {'1d': 1, '1m': 30, '3m': 90, '6m': 180, '1y': 365, '2y': 730}.get(period, 730)
+        end_date = datetime.now()
+        start_date = end_date - __import__('datetime').timedelta(days=period_days)
+        
+        url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": ticker,
+            "FID_INPUT_DATE_1": start_date.strftime("%Y%m%d"),
+            "FID_INPUT_DATE_2": end_date.strftime("%Y%m%d"),
+            "FID_PERIOD_DIV_CODE": "D",
+            "FID_ORG_ADJ_PRC": "0"
+        }
+        headers = {
+            'content-type': 'application/json',
+            'authorization': f'Bearer {self.access_token}',
+            'appkey': self.app_key,
+            'appsecret': self.app_secret,
+            'tr_id': 'FHKST03010100'
+        }
+        
+        try:
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            
+            if data.get('rt_cd') != '0':
+                print(f"⚠️ KIS API 오류: {data.get('msg1', 'Unknown')}")
+                return None
+            
+            output = data.get('output2', [])
+            if not output:
+                return None
+            
+            df_data = []
+            for item in output:
+                try:
+                    df_data.append({
+                        'Date': pd.to_datetime(item['stck_bsop_date']),
+                        'Open': float(item['stck_oprc']),
+                        'High': float(item['stck_hgpr']),
+                        'Low': float(item['stck_lwpr']),
+                        'Close': float(item['stck_clpr']),
+                        'Volume': int(item['acml_vol'])
+                    })
+                except (KeyError, ValueError):
+                    continue
+            
+            if not df_data:
+                return None
+                
+            df = pd.DataFrame(df_data)
+            df = df.sort_values('Date').set_index('Date')
+            print(f"  ✅ KIS: {ticker} ({len(df)} rows)")
+            return df
+            
+        except Exception as e:
+            print(f"  ❌ KIS API 오류 ({ticker}): {e}")
+            return None
+
+# 한투 API 사용 가능
+KIS_AVAILABLE = True
 
 # RL 트레이더 임포트
 try:
