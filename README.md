@@ -1,148 +1,80 @@
-# 반디 퀀트 (Bandi Quant) v4.0
+# 🤖 반디_봇 (Bandi_Bot)
+## 반디퀼_트레이드봇-beta1
 
-🤖 **AI 예측 통합 주식 브리핑 시스템**
-
----
-
-## ✨ 주요 기능
-
-- ✅ **43개 전체 종목 분석** (국내 + 미국)
-- ✅ **ML 예측** (상승/하락 방향 + 신뢰도)
-- ✅ **14가지 캔들 패턴** 자동 감지
-- ✅ **차트 자동 생성** (6개월 캔들차트)
-- ✅ **텔레그램 브리핑** (텍스트 + 이미지)
-- ✅ **매일 아침 자동 실행** (오전 6:30 KST)
+**반디 알파 (Bandi Alpha) 전략 기반 로컬 자동 트레이딩 봇**
 
 ---
 
-## 🚀 빠른 시작
+## 📋 개요
 
-### 1. 저장소 클론
+| 항목 | 내용 |
+|:---|:---|
+| **이름** | 반디퀼_트레이드봇-beta1 |
+| **별칭** | 반디_봇 |
+| **버전** | beta1 |
+| **전략** | 반디 알파 4단계 레이어 |
+| **목표 수익률** | 연 30~50% |
+| **목표 Sharpe** | 1.2+ |
+| **목표 승률** | 55~60% |
 
-```bash
-git clone https://github.com/kdh-ygam/bandi-quant.git
-cd bandi-quant
+---
+
+## 🎯 4단계 전략
+
+```
+┌─────────────────────────────────────────────┐
+│  1️⃣ 뉴스 필터링                             │
+│     └─ Sentiment ≥ +0.8                    │
+├─────────────────────────────────────────────┤
+│  2️⃣ 기술적 확인                             │
+│     └─ Golden Cross + RSI 40~70 + VIX <20  │
+├─────────────────────────────────────────────┤
+│  3️⃣ RL 에이전트 (PPO)                      │
+│     └─ Action: 관망/소액/대량/전량매도     │
+├─────────────────────────────────────────────┤
+│  4️⃣ 리스크 관리                            │
+│     └─ -5% 손절, +10%/20% 익절            │
+└─────────────────────────────────────────────┘
 ```
 
-### 2. Python 환경 설정
+---
 
+## 🚀 설치 및 실행
+
+### 1. 설치
 ```bash
+# Python 3.11 권장
 pip install -r requirements.txt
 ```
 
-### 3. API 키 설정
-
-`.env` 파일을 생성하고 API 키를 입력하세요:
-
+### 2. 모의투자 모드 (기본)
 ```bash
-cp .env.example .env
-# .env 파일을 편집하여 키 입력
+python bandi_bot.py --mode paper --interval 300
 ```
 
-**필수 환경 변수:**
-- `TELEGRAM_TOKEN` - 텔레그램 봇 토큰
-- `TELEGRAM_CHAT_ID` - 발송할 채팅방 ID
-- `NAVER_CLOVA_CLIENT_ID` - 네이버 클로바 TTS
-- `NAVER_CLOVA_CLIENT_SECRET` - 네이버 클로바 TTS
-
-### 4. 실행
-
-```bash
-source .env
-python3 bandi_quant_v40.py
-```
+### 3. 옵션
+| 옵션 | 설명 | 기본값 |
+|:---|:---|:---|
+| `--mode` | paper 또는 live | paper |
+| `--interval` | 스캔 간격(초) | 300 (5분) |
+| `--tickers` | 종목 목록 (쉼표 구분) | 기본 9개 |
 
 ---
 
-## 🤖 GitHub Actions 자동 브리핑
+## 📊 운영 로그
 
-GitHub Actions로 매일 아침 자동 브리핑을 받을 수 있습니다.
-
-### 설정 방법
-
-1. **GitHub 저장소 → Settings → Secrets and variables → Actions**
-
-2. **New repository secret** 클릭하여 다음 추가:
-   - `TELEGRAM_TOKEN`: 텔레그램 봇 토큰
-   - `TELEGRAM_CHAT_ID`: 채팅방 ID (예: 6146433054)
-   - `NAVER_CLOVA_CLIENT_ID`: 네이버 클로바 Client ID
-   - `NAVER_CLOVA_CLIENT_SECRET`: 네이버 클로바 Client Secret
-
-3. **Actions 탭**에서 "Daily Market Briefing" 확인
-
-4. **수동 실행**: "Run workflow" 버튼 클릭
-
-### 스케줄
-
-- **한국 시간**: 평일 오전 6:30
-- **크론 표현**: `30 21 * * 0-4` (UTC 기준)
+- `bandi_bot.log` - 실행 로그
+- `bandi_bot_data/bot_state.json` - 포트폴리오 상태
 
 ---
 
-## 📁 파일 구조
+## ⚠️ 경고
 
-```
-bandi-quant/
-├── bandi_quant_v40.py          # 메인 브리핑 시스템
-├── chart_standard.py           # 차트 생성 모듈
-├── daily_briefing.sh           # 로컬 실행 스크립트
-├── .env.example                # 환경 변수 예시
-├── .github/workflows/          # GitHub Actions
-│   └── daily_briefing.yml
-├── analysis/                   # 분석 결과 저장
-├── charts/                     # 생성된 차트 저장
-└── memory/                     # 대화 기록
-```
+**live 모드는 실제 매매를 실행합니다!**
+- 반드시 모의투자(paper)로 충분히 테스트 후 사용
+- API 키 설정 필요 (한투 API)
 
 ---
 
-## 🛠️ 개발 가이드
-
-### 새로운 종목 추가
-
-`bandi_quant_v40.py`에서 `STOCKS` 목록 수정:
-
-```python
-STOCKS = [
-    ("ticker", "Korean Name", "Sector"),
-    # ...
-]
-```
-
-### 차트 커스터마이징
-
-`chart_standard.py`의 `create_stock_chart()` 함수 수정
-
----
-
-## 📊 분석 등급 체계
-
-| 등급 | 조건 | 추천 |
-|:---:|:---:|:---|
-| 🟢 강력매수 | RSI < 35 | 즉시 분할 매수 |
-| 🟡 매수권유 | RSI 35-45 | 참여 매수 |
-| 🟠 매수대비 | RSI 45-50 | 관망 후 진입 |
-| ⚪ 보유 | 중립 | 현 포지션 유지 |
-| 🟡 매도대비 | RSI 60+ | 매도 준비 |
-| 🟠 매도권유 | RSI 60-70 + 수익 20%+ | 점진적 익절 |
-| 🔴 강력매도 | RSI > 70 + 수익 50%+ | 즉시 50% 익절 |
-
----
-
-## 📝 업데이트 히스토리
-
-- **v4.0** (2026-03-02): ML 예측 + 차트 통합
-- **v3.2** (2026-02-28): 패턴 분석 + 의견 추가
-- **v3.0** (2026-02-27): 차트 통합
-- **v2.1** (2026-02-25): 기본 RSI/MACD/BB 분석
-
----
-
-## 👤 제작자
-
-- **반디 (Bandi)** - AI 어시스턴트 🤖
-- **파파 (Papa)** - 프로젝트 오너 👨
-
----
-
-*© 2026 Bandi Quant. All rights reserved.*
+_만든이: 반디 🐾_
+_버전: beta1_
