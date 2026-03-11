@@ -1,0 +1,152 @@
+{
+  "timestamp": "2026-03-10T23:38:41Z",
+  "run_id": "22929226716",
+  "jobs": {
+    "YAHOO": {
+      "source": "YAHOO",
+      "timestamp": "2026-03-10T23:50:27.653980",
+      "config": {
+        "total_timesteps": 50000,
+        "delay_between_stocks": 5.0,
+        "rate_limit_delay": 3,
+        "retry_delay": 60,
+        "max_retries": 3
+      },
+      "results": [
+        {
+          "ticker": "NEE",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "ENPH",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "SEDG",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "FSLR",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "RUN",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "BE",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "ALB",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "QS",
+          "success": true,
+          "attempt": 1
+        },
+        {
+          "ticker": "JNJ",
+          "success": true,
+          "attempt": 1
+        }
+      ]
+    },
+    "KIS": {
+      "source": "KIS",
+      "timestamp": "2026-03-10T23:40:26.025861",
+      "config": {
+        "total_timesteps": 50000,
+        "delay_between_stocks": 5.0,
+        "rate_limit_delay": 3,
+        "retry_delay": 60,
+        "max_retries": 3
+      },
+      "results": [
+        {
+          "ticker": "000660.KS",
+          "success": false,
+          "error": "데이터 부족: 000660.KS"
+        },
+        {
+          "ticker": "005930.KS",
+          "success": false,
+          "error": "데이터 부족: 005930.KS"
+        },
+        {
+          "ticker": "042700.KS",
+          "success": false,
+          "error": "데이터 부족: 042700.KS"
+        },
+        {
+          "ticker": "001740.KS",
+          "success": false,
+          "error": "데이터 부족: 001740.KS"
+        },
+        {
+          "ticker": "068270.KS",
+          "success": false,
+          "error": "데이터 부족: 068270.KS"
+        },
+        {
+          "ticker": "207940.KS",
+          "success": false,
+          "error": "데이터 부족: 207940.KS"
+        },
+        {
+          "ticker": "196170.KS",
+          "success": false,
+          "error": "데이터 부족: 196170.KS"
+        },
+        {
+          "ticker": "136480.KS",
+          "success": false,
+          "error": "데이터 부족: 136480.KS"
+        },
+        {
+          "ticker": "005380.KS",
+          "success": false,
+          "error": "데이터 부족: 005380.KS"
+        },
+        {
+          "ticker": "000270.KS",
+          "success": false,
+          "error": "데이터 부족: 000270.KS"
+        },
+        {
+          "ticker": "012330.KS",
+          "success": false,
+          "error": "데이터 부족: 012330.KS"
+        },
+        {
+          "ticker": "373220.KS",
+          "success": false,
+          "error": "데이터 부족: 373220.KS"
+        },
+        {
+          "ticker": "006400.KS",
+          "success": false,
+          "error": "데이터 부족: 006400.KS"
+        },
+        {
+          "ticker": "005490.KS",
+          "success": false,
+          "error": "데이터 부족: 005490.KS"
+        },
+        {
+          "ticker": "247540.KS",
+          "success": false,
+          "error": "데이터 부족: 247540.KS"
+        }
+      ]
+    }
+  }
+}
