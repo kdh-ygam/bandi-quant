@@ -1,0 +1,58 @@
+name: RL Backtest v3 Models (42종목)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest-v3-models:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        pip install -r requirements.txt
+    
+    - name: Download all 42 trained models
+      run: |
+        mkdir -p trained_models
+        # Use the latest successful v3 training
+        RUN_ID=$(gh run list --workflow="RL Training v3.0 - Dual API Parallel 🚀" --status=success --limit=1 --json databaseId -q '.[0].databaseId')
+        echo "Using v3 run ID: $RUN_ID"
+        
+        # Download models from all groups (42 models)
+        for artifact in rl-v3-models-korea rl-v3-models-us-semi rl-v3-models-us-tech rl-v3-models-us-others; do
+          echo "Downloading $artifact..."
+          gh run download $RUN_ID --name $artifact --dir ./trained_models/ 2>/dev/null || echo "Artifact $artifact not found"
+        done
+        
+        echo "=== Downloaded Models ==="
+        find trained_models/ -name "*.zip" -o -name "*.pth" -o -name "*.pt" | head -50
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Run backtesting on all 42 models
+      run: |
+        python3 backtest_all_v3_models.py || python3 backtest_rl_trained.py
+    
+    - name: Upload backtest results
+      uses: actions/upload-artifact@v4
+      with:
+        name: rl-v3-full-backtest
+        path: |
+          backtest_results.json
+          backtest_summary.txt
+          backtest_*.csv
+    
+    - name: Display summary
+      run: |
+        echo "═══════════════════════════════════════════════"
+        echo "  RL v3.0 - 42종목 백테스트 결과"
+        echo "═══════════════════════════════════════════════"
+        cat backtest_summary.txt || echo "Summary file not found"
